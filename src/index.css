@@ -45,6 +45,11 @@
 
     --glass: 220 20% 14% / 0.6;
     --glass-border: 220 16% 28% / 0.4;
+
+    --traffic-blue: 217 91% 60%;
+    --traffic-green: 160 84% 39%;
+    --traffic-amber: 38 92% 50%;
+    --traffic-purple: 258 90% 66%;
   }
 }
 
@@ -65,6 +70,11 @@
 
   .gradient-primary {
     background: linear-gradient(135deg, hsl(160 84% 39%), hsl(174 72% 40%));
+  }
+
+  .gradient-total {
+    background: linear-gradient(135deg, hsl(160 84% 39% / 0.15), hsl(174 72% 40% / 0.1));
+    border-color: hsl(160 84% 39% / 0.25);
   }
 
   .pulse-live {
