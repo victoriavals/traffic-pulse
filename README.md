@@ -1,73 +1,108 @@
-# Welcome to your Lovable project
+# 🚦 Traffic Pulse — Vehicle Traffic Detection Dashboard
 
-## Project info
+> Frontend dashboard untuk sistem deteksi dan penghitungan kendaraan lalu lintas berbasis **YOLOv11**, dibangun sebagai bagian dari **Projek Sarjana Muda (PSM)**.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Tech Stack
 
-## How can I edit this code?
+| Teknologi | Peran |
+|---|---|
+| **React 18** + **TypeScript** | UI framework + type safety |
+| **Vite 5** | Build tool & dev server |
+| **TailwindCSS 3** | Utility-first styling |
+| **shadcn/ui** + **Radix UI** | Accessible component library |
+| **Recharts** | Data visualization (bar charts) |
+| **React Router v6** | Client-side routing |
+| **TanStack Query** | Server state management |
 
-There are several ways of editing your application.
+## Fitur Utama
 
-**Use Lovable**
+| Fitur | Deskripsi |
+|---|---|
+| 📊 **Dashboard** | Overview statistik, server info, activity log |
+| 🖼️ **Deteksi Gambar** | Upload gambar → deteksi kendaraan (JSON/Annotated) |
+| 🎬 **Proses Video** | Upload video → hitung kendaraan + bar chart + annotated video |
+| 📡 **Live Monitoring** | Real-time RTSP stream via WebSocket + live counter |
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+### Kelas Kendaraan yang Dideteksi
 
-Changes made via Lovable will be committed automatically to this repo.
+- 🚛 Big Vehicle (Truk, Bus)
+- 🚗 Car (Mobil)
+- 🚶 Pedestrian (Pejalan Kaki)
+- 🏍️ Two Wheeler (Motor, Sepeda)
 
-**Use your preferred IDE**
+## Setup & Development
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Prerequisites
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+- **Node.js** >= 18
+- **npm** >= 9
+- **Backend API** running di `http://localhost:8000` (FastAPI + YOLOv11)
 
-Follow these steps:
+### Installation
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
+```bash
+# Clone repository
 git clone <YOUR_GIT_URL>
+cd traffic-pulse
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# Install dependencies
+npm install
 
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start development server (port 8080)
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Available Scripts
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+| Script | Deskripsi |
+|---|---|
+| `npm run dev` | Start dev server (port 8080) |
+| `npm run build` | Build production bundle |
+| `npm run preview` | Preview production build |
+| `npm run lint` | Run ESLint |
+| `npm run test` | Run Vitest tests |
 
-**Use GitHub Codespaces**
+## Konfigurasi API
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Default API base URL: `http://localhost:8000`
 
-## What technologies are used for this project?
+Bisa diubah melalui **Settings** (ikon ⚙️ di top bar) atau langsung di kode `src/contexts/ApiContext.tsx`.
 
-This project is built with:
+### Required Backend Endpoints
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+| Method | Endpoint | Deskripsi |
+|---|---|---|
+| `GET` | `/` | Health check + device info |
+| `POST` | `/image/detect` | Deteksi objek dari gambar (JSON) |
+| `POST` | `/image/annotate` | Deteksi + return gambar annotated |
+| `POST` | `/video/detect` | Hitung kendaraan dari video (JSON) |
+| `POST` | `/video/annotate` | Hitung + return video annotated |
+| `POST` | `/rtsp/detect` | Snapshot dari RTSP stream |
+| `WS` | `/rtsp/stream` | Real-time RTSP streaming |
 
-## How can I deploy this project?
+## Struktur Project
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+```
+src/
+├── pages/          # Halaman utama (Dashboard, DeteksiGambar, ProsesVideo, LiveMonitoring)
+├── components/     # Layout components + 49 shadcn/ui components
+├── contexts/       # React Context (API settings)
+├── hooks/          # Custom hooks (toast, mobile detection)
+├── lib/            # Utilities (activity log, cn helper)
+└── test/           # Test files
+```
 
-## Can I connect a custom domain to my Lovable project?
+## Deployment
 
-Yes, you can!
+```bash
+# Build for production
+npm run build
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+# Output di folder dist/
+```
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Build output siap di-deploy ke platform hosting statis seperti **Vercel**, **Netlify**, atau **GitHub Pages**.
+
+## License
+
+© 2026 PSM — Traffic Pulse v1.0.0
