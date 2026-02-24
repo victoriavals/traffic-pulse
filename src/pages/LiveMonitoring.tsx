@@ -2,7 +2,8 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import {
   Radio, Play, Square, Camera, SlidersHorizontal, Info,
   Truck, Car, PersonStanding, Bike, BarChart3, Loader2,
-  AlertCircle, ChevronDown, ChevronUp, Copy, Wifi, WifiOff
+  AlertCircle, ChevronDown, ChevronUp, Copy, Wifi, WifiOff,
+  Eye, EyeOff
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -78,6 +79,7 @@ const LiveMonitoring = () => {
   const [iou, setIou] = useState(0.5);
   const [modelSize, setModelSize] = useState<ModelSize>("SMALL");
   const [frameCount, setFrameCount] = useState(150);
+  const [showVideo, setShowVideo] = useState(true);
 
   // Counting line
   const [lineStartX, setLineStartX] = useState(0.0);
@@ -147,6 +149,7 @@ const LiveMonitoring = () => {
           end_x: lineEndX,
           end_y: lineEndY,
         },
+        send_frame: showVideo,
       }));
     };
 
@@ -163,8 +166,12 @@ const LiveMonitoring = () => {
           }
           setStreamInfo(msg);
           setError(null); // clear previous error on successful info
-        } else if (data.type === "frame" && data.frame) {
-          setFrameSrc(`data:image/jpeg;base64,${data.frame}`);
+        } else if (data.type === "frame") {
+          if (data.frame) {
+            setFrameSrc(`data:image/jpeg;base64,${data.frame}`);
+          } else if (!showVideo) {
+            setFrameSrc(null); // Clear old frame if toggled off
+          }
           setLiveFps(data.fps ?? 0);
           setFrameNumber(data.frame_number ?? 0);
           setLiveCounts(data.counts ?? EMPTY_COUNTS);
@@ -190,7 +197,7 @@ const LiveMonitoring = () => {
         prev === "streaming" || prev === "reconnecting" ? "stopped" : prev
       );
     };
-  }, [rtspUrl, baseUrl, confidence, iou, modelSize, lineStartX, lineStartY, lineEndX, lineEndY]);
+  }, [rtspUrl, baseUrl, confidence, iou, modelSize, lineStartX, lineStartY, lineEndX, lineEndY, showVideo]);
 
   const stopStream = useCallback(() => {
     if (wsRef.current) {
@@ -391,6 +398,25 @@ const LiveMonitoring = () => {
           </div>
         )}
 
+        {/* Headless Mode (Video Toggle) */}
+        {mode === "live" && (
+          <div className="border-t border-border/40 pt-4 flex items-center justify-between">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground block">Tampilkan Video Stream</label>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Matikan untuk menghemat bandwidth & performa</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowVideo(!showVideo)}
+              disabled={isBusy}
+              className={`h-8 w-14 px-0 ${showVideo ? "bg-primary/10 text-primary border-primary/30" : "text-muted-foreground"}`}
+            >
+              {showVideo ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            </Button>
+          </div>
+        )}
+
         {/* Counting Line (collapsible) */}
         <div className="border-t border-border/40 pt-4">
           <button
@@ -531,6 +557,24 @@ const LiveMonitoring = () => {
                   Frame #{frameNumber}
                 </div>
               </>
+            ) : !showVideo && isStreaming ? (
+              <div className="flex flex-col items-center justify-center py-24 text-muted-foreground relative">
+                <EyeOff className="h-10 w-10 mb-3 opacity-50" />
+                <p className="text-sm font-medium">Video Dinonaktifkan</p>
+                <p className="text-xs mt-1 text-muted-foreground/80">Penghitungan berjalan di latar belakang (Mode Performa)</p>
+
+                {/* Overlays that still show without video */}
+                <div className="absolute top-3 left-3 bg-black/40 backdrop-blur-sm rounded-lg px-2.5 py-1 text-xs font-mono text-white/80">
+                  {liveFps.toFixed(1)} FPS
+                </div>
+                <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-red-600/90 backdrop-blur-sm rounded-lg px-2.5 py-1 text-xs font-bold text-white">
+                  <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
+                  LIVE
+                </div>
+                <div className="absolute bottom-3 left-3 bg-black/40 backdrop-blur-sm rounded-lg px-2.5 py-1 text-xs font-mono text-white/80">
+                  Frame #{frameNumber}
+                </div>
+              </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
                 <Loader2 className="h-8 w-8 mb-3 animate-spin opacity-60" />
