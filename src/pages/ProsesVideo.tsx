@@ -341,7 +341,7 @@ const ProsesVideo = () => {
       <div className="flex gap-3 opacity-0 animate-fade-in-up" style={{ animationDelay: "300ms" }}>
         <Button onClick={() => callApi("detect")} disabled={!file || loading} className="flex-1 gap-2" size="lg">
           {loading && resultMode === "json" ? <Loader2 className="h-4 w-4 animate-spin" /> : <BarChart3 className="h-4 w-4" />}
-          Hitung Kendaraan (JSON)
+          Hitung Kendaraan
         </Button>
         <Button onClick={() => callApi("annotate")} disabled={!file || loading} variant="outline" className="flex-1 gap-2" size="lg">
           {loading && resultMode === "video" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
@@ -424,11 +424,11 @@ const ProsesVideo = () => {
             <div className="glass-card rounded-xl p-4">
               <p className="text-xs font-medium text-muted-foreground mb-3">Konfigurasi Inference</p>
               <div className="space-y-2 text-xs">
-                <InfoRow icon={Cpu} label="Model" value={jsonResult.inference_config.model} />
-                <InfoRow icon={Monitor} label="Device" value={jsonResult.inference_config.device} />
-                <InfoRow icon={Maximize} label="Image Size" value={`${jsonResult.inference_config.image_size}px`} />
-                <InfoRow icon={BarChart3} label="Line Start" value={`(${jsonResult.inference_config.line_start.join(", ")})`} />
-                <InfoRow icon={BarChart3} label="Line End" value={`(${jsonResult.inference_config.line_end.join(", ")})`} />
+                <InfoRow icon={Cpu} label="Model" value={jsonResult.inference_config?.model ?? "N/A"} />
+                <InfoRow icon={Monitor} label="Device" value={jsonResult.inference_config?.device ?? "N/A"} />
+                <InfoRow icon={Maximize} label="Image Size" value={jsonResult.inference_config?.image_size ? `${jsonResult.inference_config.image_size}px` : "N/A"} />
+                <InfoRow icon={BarChart3} label="Line Start" value={Array.isArray(jsonResult.inference_config?.line_start) ? `(${jsonResult.inference_config.line_start.join(", ")})` : "N/A"} />
+                <InfoRow icon={BarChart3} label="Line End" value={Array.isArray(jsonResult.inference_config?.line_end) ? `(${jsonResult.inference_config.line_end.join(", ")})` : "N/A"} />
               </div>
             </div>
           </div>
