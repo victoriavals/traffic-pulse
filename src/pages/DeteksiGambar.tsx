@@ -242,7 +242,7 @@ const DeteksiGambar = () => {
           <div className="flex gap-3">
             <Button onClick={() => callApi("detect")} disabled={!file || loading} className="flex-1 gap-2">
               {loading && resultMode !== "annotate" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-              Deteksi (JSON)
+              Deteksi
             </Button>
             <Button onClick={() => callApi("annotate")} disabled={!file || loading} variant="outline" className="flex-1 gap-2">
               {loading && resultMode === "annotate" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
