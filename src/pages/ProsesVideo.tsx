@@ -729,7 +729,7 @@ const ProsesVideo = () => {
             </div>
           </div>
 
-          {/* Column B: Counting Line */}
+          {/* Column B: Counting Line Inputs */}
           <div className="space-y-3">
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-muted-foreground">Posisi Garis Penghitung (0.0 - 1.0)</span>
@@ -746,22 +746,22 @@ const ProsesVideo = () => {
               <div><label className="text-[10px] text-muted-foreground">End X</label><Input type="number" step={0.05} min={0} max={1} value={lineEndX} onChange={(e) => setLineEndX(clampLine(e.target.value))} className="h-8 text-xs font-mono" disabled={loading || isJobActive} /></div>
               <div><label className="text-[10px] text-muted-foreground">End Y</label><Input type="number" step={0.05} min={0} max={1} value={lineEndY} onChange={(e) => setLineEndY(clampLine(e.target.value))} className="h-8 text-xs font-mono" disabled={loading || isJobActive} /></div>
             </div>
-
-            {/* Frame preview with counting line overlay */}
-            <div className="rounded-lg bg-muted/30 border border-border/40 overflow-hidden relative">
-              <canvas ref={canvasRef} className="w-full" style={{ display: "block" }} />
-              {frameLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-background/60">
-                  <Loader2 className="h-5 w-5 text-primary animate-spin" />
-                </div>
-              )}
-              {!frameImage && !frameLoading && (
-                <p className="absolute inset-0 flex items-center justify-center text-[10px] text-muted-foreground pointer-events-none">
-                  {inputMode === "upload" ? "Upload video untuk melihat preview" : "Masukkan URL untuk melihat preview"}
-                </p>
-              )}
-            </div>
           </div>
+        </div>
+
+        {/* Full-width Frame Preview with counting line overlay */}
+        <div className="mt-4 rounded-lg bg-muted/30 border border-border/40 overflow-hidden relative">
+          <canvas ref={canvasRef} className="w-full" style={{ display: "block" }} />
+          {frameLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background/60">
+              <Loader2 className="h-5 w-5 text-primary animate-spin" />
+            </div>
+          )}
+          {!frameImage && !frameLoading && (
+            <p className="absolute inset-0 flex items-center justify-center text-[10px] text-muted-foreground pointer-events-none">
+              {inputMode === "upload" ? "Upload video untuk melihat preview" : "Masukkan URL lalu klik Preview Frame"}
+            </p>
+          )}
         </div>
       </div>
 
