@@ -1,7 +1,7 @@
 export interface ActivityLog {
   id: string;
   timestamp: string;
-  type: "Gambar" | "Video" | "RTSP";
+  type: "Gambar" | "Video" | "RTSP" | "EZVIZ";
   source: string;
   totalDeteksi: number;
 }
