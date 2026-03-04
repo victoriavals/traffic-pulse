@@ -3,7 +3,7 @@ import {
   Radio, Play, Square, Camera, SlidersHorizontal, Info,
   Truck, Car, PersonStanding, Bike, BarChart3, Loader2,
   AlertCircle, ChevronDown, ChevronUp, Copy, Wifi, WifiOff,
-  Eye, EyeOff
+  Eye, EyeOff, Cloud, Monitor
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -45,6 +45,7 @@ interface SnapshotResponse {
 
 type ModelSize = "SMALL" | "MEDIUM";
 type StreamMode = "snapshot" | "live";
+type SourceType = "rtsp" | "ezviz";
 type StreamStatus = "idle" | "connecting" | "streaming" | "reconnecting" | "stopped" | "error";
 
 const EMPTY_COUNTS: Counts = { big_vehicle: 0, car: 0, pedestrian: 0, two_wheeler: 0, total: 0 };
@@ -72,6 +73,12 @@ const LiveMonitoring = () => {
 
   // Mode
   const [mode, setMode] = useState<StreamMode>("live");
+
+  // Source type
+  const [sourceType, setSourceType] = useState<SourceType>("rtsp");
+  const [deviceSerial, setDeviceSerial] = useState("");
+  const [channelNo, setChannelNo] = useState(1);
+  const [ezvizStatus, setEzvizStatus] = useState<"unknown" | "connected" | "disconnected">("unknown");
 
   // Config
   const [rtspUrl, setRtspUrl] = useState("");
@@ -120,9 +127,30 @@ const LiveMonitoring = () => {
     setLiveCounts(EMPTY_COUNTS);
   };
 
+  /* ─── Check EZVIZ status on mount / source change ─── */
+  useEffect(() => {
+    if (sourceType !== "ezviz") return;
+    const checkEzviz = async () => {
+      try {
+        const res = await fetch(`${baseUrl}/ezviz/status`);
+        const data = await res.json();
+        setEzvizStatus(data.connected ? "connected" : "disconnected");
+      } catch {
+        setEzvizStatus("disconnected");
+      }
+    };
+    checkEzviz();
+  }, [sourceType, baseUrl]);
+
   /* ─── WebSocket Live Stream ─── */
   const startStream = useCallback(() => {
-    if (!rtspUrl.trim()) {
+    const isEzviz = sourceType === "ezviz";
+
+    if (isEzviz && !deviceSerial.trim()) {
+      setError("Masukkan serial number kamera EZVIZ");
+      return;
+    }
+    if (!isEzviz && !rtspUrl.trim()) {
       setError("Masukkan URL RTSP terlebih dahulu");
       return;
     }
@@ -133,24 +161,41 @@ const LiveMonitoring = () => {
     setFrameNumber(0);
     setLiveFps(0);
 
-    const wsUrl = baseUrl.replace(/^http/, "ws") + "/rtsp/stream";
+    const wsPath = isEzviz ? "/ezviz/stream" : "/rtsp/stream";
+    const wsUrl = baseUrl.replace(/^http/, "ws") + wsPath;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({
-        url: rtspUrl,
-        confidence,
-        iou,
-        model_size: modelSize,
-        line_config: {
-          start_x: lineStartX,
-          start_y: lineStartY,
-          end_x: lineEndX,
-          end_y: lineEndY,
-        },
-        send_frame: showVideo,
-      }));
+      const config = isEzviz
+        ? {
+            device_serial: deviceSerial,
+            channel_no: channelNo,
+            confidence,
+            iou,
+            model_size: modelSize,
+            line_config: {
+              start_x: lineStartX,
+              start_y: lineStartY,
+              end_x: lineEndX,
+              end_y: lineEndY,
+            },
+            send_frame: showVideo,
+          }
+        : {
+            url: rtspUrl,
+            confidence,
+            iou,
+            model_size: modelSize,
+            line_config: {
+              start_x: lineStartX,
+              start_y: lineStartY,
+              end_x: lineEndX,
+              end_y: lineEndY,
+            },
+            send_frame: showVideo,
+          };
+      ws.send(JSON.stringify(config));
     };
 
     ws.onmessage = (event) => {
@@ -197,7 +242,7 @@ const LiveMonitoring = () => {
         prev === "streaming" || prev === "reconnecting" ? "stopped" : prev
       );
     };
-  }, [rtspUrl, baseUrl, confidence, iou, modelSize, lineStartX, lineStartY, lineEndX, lineEndY, showVideo]);
+  }, [sourceType, deviceSerial, channelNo, rtspUrl, baseUrl, confidence, iou, modelSize, lineStartX, lineStartY, lineEndX, lineEndY, showVideo]);
 
   const stopStream = useCallback(() => {
     if (wsRef.current) {
@@ -208,7 +253,9 @@ const LiveMonitoring = () => {
     setStreamStatus("stopped");
 
     if (liveCounts.total > 0) {
-      addActivityLog({ type: "RTSP", source: rtspUrl, totalDeteksi: liveCounts.total });
+      const logSource = sourceType === "ezviz" ? `EZVIZ:${deviceSerial}` : rtspUrl;
+      const logType = sourceType === "ezviz" ? "EZVIZ" : "RTSP";
+      addActivityLog({ type: logType, source: logSource, totalDeteksi: liveCounts.total });
       localStorage.setItem("last-detection-counts", JSON.stringify({
         bigVehicle: liveCounts.big_vehicle,
         car: liveCounts.car,
@@ -216,11 +263,17 @@ const LiveMonitoring = () => {
         twoWheeler: liveCounts.two_wheeler,
       }));
     }
-  }, [rtspUrl, liveCounts]);
+  }, [sourceType, deviceSerial, rtspUrl, liveCounts]);
 
   /* ─── Snapshot ─── */
   const callSnapshot = useCallback(async () => {
-    if (!rtspUrl.trim()) {
+    const isEzviz = sourceType === "ezviz";
+
+    if (isEzviz && !deviceSerial.trim()) {
+      setError("Masukkan serial number kamera EZVIZ");
+      return;
+    }
+    if (!isEzviz && !rtspUrl.trim()) {
       setError("Masukkan URL RTSP terlebih dahulu");
       return;
     }
@@ -229,17 +282,30 @@ const LiveMonitoring = () => {
     setSnapshotResult(null);
 
     try {
-      const res = await fetch(`${baseUrl}/rtsp/detect`, {
+      const endpoint = isEzviz ? `${baseUrl}/ezviz/detect` : `${baseUrl}/rtsp/detect`;
+      const body = isEzviz
+        ? {
+            device_serial: deviceSerial,
+            channel_no: channelNo,
+            confidence,
+            iou,
+            model_size: modelSize,
+            frame_count: frameCount,
+            line_config: { start_x: lineStartX, start_y: lineStartY, end_x: lineEndX, end_y: lineEndY },
+          }
+        : {
+            url: rtspUrl,
+            confidence,
+            iou,
+            model_size: modelSize,
+            frame_count: frameCount,
+            line_config: { start_x: lineStartX, start_y: lineStartY, end_x: lineEndX, end_y: lineEndY },
+          };
+
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: rtspUrl,
-          confidence,
-          iou,
-          model_size: modelSize,
-          frame_count: frameCount,
-          line_config: { start_x: lineStartX, start_y: lineStartY, end_x: lineEndX, end_y: lineEndY },
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
@@ -249,7 +315,9 @@ const LiveMonitoring = () => {
 
       const data: SnapshotResponse = await res.json();
       setSnapshotResult(data);
-      addActivityLog({ type: "RTSP", source: rtspUrl, totalDeteksi: data.counts.total });
+      const logSource = isEzviz ? `EZVIZ:${deviceSerial}` : rtspUrl;
+      const logType = isEzviz ? "EZVIZ" : "RTSP";
+      addActivityLog({ type: logType, source: logSource, totalDeteksi: data.counts.total });
       localStorage.setItem("last-detection-counts", JSON.stringify({
         bigVehicle: data.counts.big_vehicle,
         car: data.counts.car,
@@ -262,7 +330,7 @@ const LiveMonitoring = () => {
     } finally {
       setSnapshotLoading(false);
     }
-  }, [rtspUrl, baseUrl, confidence, iou, modelSize, frameCount, lineStartX, lineStartY, lineEndX, lineEndY]);
+  }, [sourceType, deviceSerial, channelNo, rtspUrl, baseUrl, confidence, iou, modelSize, frameCount, lineStartX, lineStartY, lineEndX, lineEndY]);
 
   const copySnapshot = useCallback(() => {
     if (!snapshotResult) return;
@@ -275,6 +343,7 @@ const LiveMonitoring = () => {
   const isReconnecting = streamStatus === "reconnecting";
   const isBusy = isStreaming || isConnecting || isReconnecting || snapshotLoading;
   const displayCounts = isStreaming ? liveCounts : (snapshotResult?.counts ?? EMPTY_COUNTS);
+  const hasInput = sourceType === "ezviz" ? deviceSerial.trim() : rtspUrl.trim();
 
   return (
     <div className="space-y-5">
@@ -283,7 +352,7 @@ const LiveMonitoring = () => {
         <div>
           <h1 className="text-2xl font-bold">Live Monitoring</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Pantau lalu lintas secara real-time melalui stream RTSP
+            Pantau lalu lintas secara real-time melalui {sourceType === "ezviz" ? "EZVIZ Cloud" : "stream RTSP"}
           </p>
         </div>
         {/* Status dot */}
@@ -314,26 +383,98 @@ const LiveMonitoring = () => {
         ))}
       </div>
 
+      {/* ─── Source Type Selector ─── */}
+      <div className="opacity-0 animate-fade-in-up glass-card rounded-xl p-1.5 flex gap-1" style={{ animationDelay: "75ms" }}>
+        {([
+          { key: "rtsp" as SourceType, icon: Monitor, label: "RTSP Lokal" },
+          { key: "ezviz" as SourceType, icon: Cloud, label: "EZVIZ Cloud" },
+        ]).map(({ key, icon: SrcIcon, label }) => (
+          <button
+            key={key}
+            onClick={() => { if (!isBusy) setSourceType(key); }}
+            disabled={isBusy}
+            className={`flex-1 flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-200
+              ${sourceType === key
+                ? "bg-primary text-primary-foreground shadow-md"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/60"}
+              disabled:opacity-50`}
+          >
+            <SrcIcon className="h-4 w-4" />
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* ─── Config Card ─── */}
       <div className="glass-card rounded-xl p-5 space-y-5 opacity-0 animate-fade-in-up" style={{ animationDelay: "100ms" }}>
 
-        {/* RTSP URL */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-            {isStreaming ? <Wifi className="h-3 w-3 text-traffic-green" /> : <WifiOff className="h-3 w-3" />}
-            RTSP URL
-          </label>
-          <Input
-            value={rtspUrl}
-            onChange={(e) => setRtspUrl(e.target.value)}
-            placeholder="rtsp://admin:password@192.168.1.72:554/H.264"
-            className="font-mono text-sm"
-            disabled={isBusy}
-          />
-          {streamInfo && isStreaming && (
-            <p className="text-xs text-traffic-green font-mono">{streamInfo}</p>
-          )}
-        </div>
+        {/* Source Input */}
+        {sourceType === "rtsp" ? (
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              {isStreaming ? <Wifi className="h-3 w-3 text-traffic-green" /> : <WifiOff className="h-3 w-3" />}
+              RTSP URL
+            </label>
+            <Input
+              value={rtspUrl}
+              onChange={(e) => setRtspUrl(e.target.value)}
+              placeholder="rtsp://admin:password@192.168.1.72:554/H.264"
+              className="font-mono text-sm"
+              disabled={isBusy}
+            />
+            {streamInfo && isStreaming && (
+              <p className="text-xs text-traffic-green font-mono">{streamInfo}</p>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <Cloud className="h-3 w-3" />
+                Device Serial Number
+                {ezvizStatus === "connected" && (
+                  <span className="ml-auto text-[10px] text-traffic-green flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-traffic-green" />
+                    EZVIZ Connected
+                  </span>
+                )}
+                {ezvizStatus === "disconnected" && (
+                  <span className="ml-auto text-[10px] text-destructive flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
+                    EZVIZ Disconnected
+                  </span>
+                )}
+              </label>
+              <Input
+                value={deviceSerial}
+                onChange={(e) => setDeviceSerial(e.target.value.toUpperCase())}
+                placeholder="Contoh: AB1234567"
+                className="font-mono text-sm"
+                disabled={isBusy}
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="space-y-1">
+                <label className="text-[10px] text-muted-foreground">Channel</label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={channelNo}
+                  onChange={(e) => setChannelNo(parseInt(e.target.value) || 1)}
+                  className="h-8 text-xs font-mono w-20"
+                  disabled={isBusy}
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-4">
+                Kamera dan server tidak perlu di WiFi yang sama — stream via internet
+              </p>
+            </div>
+            {streamInfo && isStreaming && (
+              <p className="text-xs text-traffic-green font-mono">{streamInfo}</p>
+            )}
+          </div>
+        )}
 
         {/* Sliders + Model */}
         <div className="grid gap-4 md:grid-cols-3">
@@ -470,7 +611,7 @@ const LiveMonitoring = () => {
               {!isStreaming && !isConnecting ? (
                 <Button
                   onClick={startStream}
-                  disabled={!rtspUrl.trim() || snapshotLoading}
+                  disabled={!hasInput || snapshotLoading}
                   className="gap-2 bg-traffic-green text-black hover:bg-traffic-green/90"
                 >
                   <Play className="h-4 w-4" />
@@ -492,7 +633,7 @@ const LiveMonitoring = () => {
           ) : (
             <Button
               onClick={callSnapshot}
-              disabled={!rtspUrl.trim() || snapshotLoading || isStreaming}
+              disabled={!hasInput || snapshotLoading || isStreaming}
               className="gap-2"
             >
               {snapshotLoading
@@ -578,8 +719,10 @@ const LiveMonitoring = () => {
             ) : (
               <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
                 <Loader2 className="h-8 w-8 mb-3 animate-spin opacity-60" />
-                <p className="text-sm">Menghubungkan ke stream...</p>
-                <p className="text-xs mt-1 font-mono text-muted-foreground/60">{rtspUrl}</p>
+                <p className="text-sm">Menghubungkan ke {sourceType === "ezviz" ? "EZVIZ Cloud" : "stream"}...</p>
+                <p className="text-xs mt-1 font-mono text-muted-foreground/60">
+                  {sourceType === "ezviz" ? `Device: ${deviceSerial}` : rtspUrl}
+                </p>
               </div>
             )}
           </div>
@@ -661,7 +804,7 @@ const LiveMonitoring = () => {
         >
           <div className={`rounded-2xl p-4 mb-4 ${mode === "live" ? "bg-traffic-green/10" : "bg-primary/10"}`}>
             {mode === "live"
-              ? <Radio className="h-8 w-8 text-traffic-green" />
+              ? (sourceType === "ezviz" ? <Cloud className="h-8 w-8 text-traffic-green" /> : <Radio className="h-8 w-8 text-traffic-green" />)
               : <Camera className="h-8 w-8 text-primary" />
             }
           </div>
@@ -670,8 +813,12 @@ const LiveMonitoring = () => {
           </h3>
           <p className="text-sm text-muted-foreground max-w-sm">
             {mode === "live"
-              ? "Masukkan URL RTSP di atas dan klik \"Mulai Live Stream\". Stream akan berjalan terus hingga Anda klik \"Stop Stream\"."
-              : `Masukkan URL RTSP dan klik "Ambil Snapshot". API akan capture ${frameCount} frame lalu return hasil counting.`
+              ? sourceType === "ezviz"
+                ? "Masukkan serial number kamera EZVIZ di atas dan klik \"Mulai Live Stream\". Stream diambil via internet melalui EZVIZ Cloud."
+                : "Masukkan URL RTSP di atas dan klik \"Mulai Live Stream\". Stream akan berjalan terus hingga Anda klik \"Stop Stream\"."
+              : sourceType === "ezviz"
+                ? `Masukkan serial number kamera EZVIZ dan klik "Ambil Snapshot". API akan capture ${frameCount} frame via cloud.`
+                : `Masukkan URL RTSP dan klik "Ambil Snapshot". API akan capture ${frameCount} frame lalu return hasil counting.`
             }
           </p>
         </div>
