@@ -3,7 +3,7 @@ import {
   Radio, Play, Square, Camera, SlidersHorizontal, Info,
   Truck, Car, PersonStanding, Bike, BarChart3, Loader2,
   AlertCircle, ChevronDown, ChevronUp, Copy, Wifi, WifiOff,
-  Eye, EyeOff, Cloud, Monitor
+  Eye, EyeOff, Cloud, Monitor, RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -22,12 +22,16 @@ interface Counts {
 }
 
 interface WSMessage {
-  type: "frame" | "info" | "error";
+  type: "frame" | "info" | "error" | "retry_status";
   frame?: string;
   fps?: number;
   frame_number?: number;
   counts?: Counts;
   message?: string;
+  retrying?: boolean;
+  consecutive_failures?: number;
+  max_failures?: number;
+  last_capture_time?: string;
 }
 
 interface SnapshotResponse {
@@ -87,6 +91,8 @@ const LiveMonitoring = () => {
   const [modelSize, setModelSize] = useState<ModelSize>("SMALL");
   const [frameCount, setFrameCount] = useState(150);
   const [showVideo, setShowVideo] = useState(true);
+  const [persistentRetry, setPersistentRetry] = useState(false);
+  const [retryInfo, setRetryInfo] = useState<{ retrying: boolean; failures: number; message: string } | null>(null);
 
   // Counting line
   const [lineStartX, setLineStartX] = useState(0.0);
@@ -160,6 +166,7 @@ const LiveMonitoring = () => {
     setLiveCounts(EMPTY_COUNTS);
     setFrameNumber(0);
     setLiveFps(0);
+    setRetryInfo(null);
 
     const wsPath = isEzviz ? "/ezviz/stream" : "/rtsp/stream";
     const wsUrl = baseUrl.replace(/^http/, "ws") + wsPath;
@@ -181,6 +188,7 @@ const LiveMonitoring = () => {
               end_y: lineEndY,
             },
             send_frame: showVideo,
+            persistent_retry: persistentRetry,
           }
         : {
             url: rtspUrl,
@@ -201,16 +209,28 @@ const LiveMonitoring = () => {
     ws.onmessage = (event) => {
       try {
         const data: WSMessage = JSON.parse(event.data);
-        if (data.type === "info") {
+        if (data.type === "retry_status") {
+          if (data.retrying) {
+            setRetryInfo({
+              retrying: true,
+              failures: data.consecutive_failures ?? 0,
+              message: data.message ?? "Retrying...",
+            });
+            setStreamStatus("reconnecting");
+          } else {
+            // Recovered
+            setRetryInfo(null);
+            setStreamStatus("streaming");
+          }
+        } else if (data.type === "info") {
           const msg = data.message ?? "";
-          // Reconnect progress messages from backend
           if (msg.toLowerCase().startsWith("reconnect")) {
             setStreamStatus("reconnecting");
           } else {
             setStreamStatus((prev) => prev === "connecting" || prev === "reconnecting" ? "streaming" : prev);
           }
           setStreamInfo(msg);
-          setError(null); // clear previous error on successful info
+          setError(null);
         } else if (data.type === "frame") {
           if (data.frame) {
             setFrameSrc(`data:image/jpeg;base64,${data.frame}`);
@@ -242,7 +262,7 @@ const LiveMonitoring = () => {
         prev === "streaming" || prev === "reconnecting" ? "stopped" : prev
       );
     };
-  }, [sourceType, deviceSerial, channelNo, rtspUrl, baseUrl, confidence, iou, modelSize, lineStartX, lineStartY, lineEndX, lineEndY, showVideo]);
+  }, [sourceType, deviceSerial, channelNo, rtspUrl, baseUrl, confidence, iou, modelSize, lineStartX, lineStartY, lineEndX, lineEndY, showVideo, persistentRetry]);
 
   const stopStream = useCallback(() => {
     if (wsRef.current) {
@@ -558,6 +578,30 @@ const LiveMonitoring = () => {
           </div>
         )}
 
+        {/* Persistent Retry (EZVIZ only, live mode) */}
+        {mode === "live" && sourceType === "ezviz" && (
+          <div className="border-t border-border/40 pt-4 flex items-center justify-between">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground block flex items-center gap-1.5">
+                <RefreshCw className="h-3 w-3" />
+                Auto-Retry Terus Menerus
+              </label>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Jika capture gagal, tetap coba ulang dan tampilkan frame terakhir
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPersistentRetry(!persistentRetry)}
+              disabled={isBusy}
+              className={`h-8 px-3 text-xs ${persistentRetry ? "bg-primary/10 text-primary border-primary/30" : "text-muted-foreground"}`}
+            >
+              {persistentRetry ? "ON" : "OFF"}
+            </Button>
+          </div>
+        )}
+
         {/* Counting Line (collapsible) */}
         <div className="border-t border-border/40 pt-4">
           <button
@@ -678,8 +722,15 @@ const LiveMonitoring = () => {
                   className={`w-full object-contain transition-opacity duration-300 ${isReconnecting ? "opacity-50" : "opacity-100"
                     }`}
                 />
-                {/* Reconnecting overlay */}
-                {isReconnecting && (
+                {/* Retry indicator overlay */}
+                {retryInfo?.retrying && (
+                  <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-yellow-500/90 backdrop-blur-sm rounded-lg px-4 py-2 flex items-center gap-2 shadow-lg">
+                    <RefreshCw className="h-4 w-4 text-black animate-spin" />
+                    <span className="text-xs font-medium text-black">{retryInfo.message}</span>
+                  </div>
+                )}
+                {/* Reconnecting overlay (non-persistent mode) */}
+                {isReconnecting && !retryInfo?.retrying && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm">
                     <Loader2 className="h-10 w-10 text-yellow-400 animate-spin mb-2" />
                     <p className="text-sm text-yellow-400 font-medium">{streamInfo || "Reconnecting..."}</p>
