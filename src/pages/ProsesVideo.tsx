@@ -1,14 +1,14 @@
 import { useState, useRef, useCallback, useEffect, type DragEvent, type ChangeEvent } from "react";
 import {
-  Upload, Film, X, SlidersHorizontal, BarChart3, Truck, Car,
+  Upload, Film, X, BarChart3, Truck, Car,
   PersonStanding, Bike, Loader2, Download, AlertCircle, Info,
   Copy, Play, Cpu, Monitor, Maximize, Clock, Layers, Timer,
   Link, CheckCircle2, XCircle, RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { useApiSettings } from "@/contexts/ApiContext";
+import { useDetectionConfig } from "@/contexts/DetectionConfigContext";
 import { addActivityLog } from "@/lib/activity-log";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -44,7 +44,6 @@ interface VideoJobStatus {
   error: string | null;
 }
 
-type ModelSize = "SMALL" | "MEDIUM";
 type InputMode = "upload" | "url";
 type ResultMode = "json" | "video" | null;
 
@@ -69,6 +68,7 @@ const JOB_STATUS_CONFIG: Record<VideoJobStatus["status"], { label: string; color
 /* ─── Page ─── */
 const ProsesVideo = () => {
   const { baseUrl } = useApiSettings();
+  const { confidence, iou, modelSize, lineStartX, lineStartY, lineEndX, lineEndY } = useDetectionConfig();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Input mode
@@ -83,15 +83,6 @@ const ProsesVideo = () => {
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<VideoJobStatus | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Shared config
-  const [confidence, setConfidence] = useState(0.45);
-  const [iou, setIou] = useState(0.5);
-  const [modelSize, setModelSize] = useState<ModelSize>("SMALL");
-  const [lineStartX, setLineStartX] = useState(0.0);
-  const [lineStartY, setLineStartY] = useState(0.15);
-  const [lineEndX, setLineEndX] = useState(1.0);
-  const [lineEndY, setLineEndY] = useState(0.65);
 
   // Upload results
   const [loading, setLoading] = useState(false);
@@ -470,12 +461,6 @@ const ProsesVideo = () => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const clampLine = (v: string) => {
-    const n = parseFloat(v);
-    if (isNaN(n)) return 0;
-    return Math.min(1, Math.max(0, parseFloat(n.toFixed(2))));
-  };
-
   /* ─── Derived state ─── */
   const isJobActive = jobStatus !== null && (jobStatus.status === "pending" || jobStatus.status === "downloading" || jobStatus.status === "processing");
   const isJobDone = jobStatus?.status === "done";
@@ -688,69 +673,9 @@ const ProsesVideo = () => {
         </div>
       )}
 
-      {/* ═══ Configuration Card ═══ */}
+      {/* ═══ Frame Preview ═══ */}
       <div className="glass-card rounded-xl p-5 opacity-0 animate-fade-in-up" style={{ animationDelay: "200ms" }}>
-        <div className="flex items-center gap-2 mb-4">
-          <SlidersHorizontal className="h-4 w-4 text-primary" />
-          <span className="font-medium text-sm">Konfigurasi Deteksi</span>
-        </div>
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Column A: Detection sliders */}
-          <div className="space-y-5">
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Confidence Threshold</span>
-                <span className="font-mono font-medium">{confidence.toFixed(2)}</span>
-              </div>
-              <Slider value={[confidence]} onValueChange={([v]) => setConfidence(v)} min={0} max={1} step={0.05} disabled={loading || isJobActive} />
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">IoU Threshold</span>
-                <span className="font-mono font-medium">{iou.toFixed(2)}</span>
-              </div>
-              <Slider value={[iou]} onValueChange={([v]) => setIou(v)} min={0} max={1} step={0.05} disabled={loading || isJobActive} />
-            </div>
-            <div className="space-y-2">
-              <span className="text-xs text-muted-foreground">Model Size</span>
-              <div className="flex gap-2">
-                {(["SMALL", "MEDIUM"] as ModelSize[]).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => !(loading || isJobActive) && setModelSize(s)}
-                    disabled={loading || isJobActive}
-                    className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all ${modelSize === s ? "bg-primary text-primary-foreground shadow-md" : "bg-muted/50 text-muted-foreground hover:bg-muted"} disabled:opacity-50`}
-                  >
-                    {s === "SMALL" ? "SMALL (Cepat)" : "MEDIUM (Akurat)"}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[10px] text-muted-foreground">SMALL: YOLOv11s, 19 MB — MEDIUM: YOLOv11m, 40 MB</p>
-            </div>
-          </div>
-
-          {/* Column B: Counting Line Inputs */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-muted-foreground">Posisi Garis Penghitung (0.0 - 1.0)</span>
-              <div className="group relative">
-                <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-popover text-popover-foreground text-[10px] rounded-md shadow-lg border opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
-                  Kendaraan dihitung saat melewati garis ini
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div><label className="text-[10px] text-muted-foreground">Start X</label><Input type="number" step={0.05} min={0} max={1} value={lineStartX} onChange={(e) => setLineStartX(clampLine(e.target.value))} className="h-8 text-xs font-mono" disabled={loading || isJobActive} /></div>
-              <div><label className="text-[10px] text-muted-foreground">Start Y</label><Input type="number" step={0.05} min={0} max={1} value={lineStartY} onChange={(e) => setLineStartY(clampLine(e.target.value))} className="h-8 text-xs font-mono" disabled={loading || isJobActive} /></div>
-              <div><label className="text-[10px] text-muted-foreground">End X</label><Input type="number" step={0.05} min={0} max={1} value={lineEndX} onChange={(e) => setLineEndX(clampLine(e.target.value))} className="h-8 text-xs font-mono" disabled={loading || isJobActive} /></div>
-              <div><label className="text-[10px] text-muted-foreground">End Y</label><Input type="number" step={0.05} min={0} max={1} value={lineEndY} onChange={(e) => setLineEndY(clampLine(e.target.value))} className="h-8 text-xs font-mono" disabled={loading || isJobActive} /></div>
-            </div>
-          </div>
-        </div>
-
-        {/* Full-width Frame Preview with counting line overlay */}
-        <div className="mt-4 rounded-lg bg-muted/30 border border-border/40 overflow-hidden relative">
+        <div className="rounded-lg bg-muted/30 border border-border/40 overflow-hidden relative">
           <canvas ref={canvasRef} className="w-full" style={{ display: "block" }} />
           {frameLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/60">
