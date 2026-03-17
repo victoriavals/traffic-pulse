@@ -1,12 +1,12 @@
 import { useState, useRef, useCallback, type DragEvent, type ChangeEvent } from "react";
 import {
-  Upload, X, SlidersHorizontal, Search, Image as ImageIcon,
-  Copy, Download, Loader2, AlertCircle, ChevronDown, ChevronUp,
+  Upload, X, Search, Image as ImageIcon,
+  Copy, Download, Loader2, AlertCircle,
   Truck, Car, PersonStanding, Bike, BarChart3, Cpu, Monitor, Maximize
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { useApiSettings } from "@/contexts/ApiContext";
+import { useDetectionConfig } from "@/contexts/DetectionConfigContext";
 import { addActivityLog } from "@/lib/activity-log";
 import { toast } from "@/hooks/use-toast";
 
@@ -25,23 +25,17 @@ interface DetectResponse {
   inference_config: { model: string; device: string; image_size: number };
 }
 
-type ModelSize = "SMALL" | "MEDIUM";
 type ResultMode = "json" | "annotate" | null;
 
 /* ─── Page ─── */
 const DeteksiGambar = () => {
   const { baseUrl } = useApiSettings();
+  const { confidence, iou, modelSize } = useDetectionConfig();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // File state
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-
-  // Config
-  const [confidence, setConfidence] = useState(0.45);
-  const [iou, setIou] = useState(0.5);
-  const [modelSize, setModelSize] = useState<ModelSize>("SMALL");
-  const [configOpen, setConfigOpen] = useState(true);
 
   // Results
   const [loading, setLoading] = useState(false);
@@ -190,53 +184,6 @@ const DeteksiGambar = () => {
               <p className="text-xs text-muted-foreground mt-2 truncate">{file?.name}</p>
             </div>
           )}
-
-          {/* Config panel */}
-          <div className="glass-card rounded-xl overflow-hidden">
-            <button onClick={() => setConfigOpen(!configOpen)} className="w-full flex items-center justify-between p-4 hover:bg-muted/20 transition-colors">
-              <div className="flex items-center gap-2">
-                <SlidersHorizontal className="h-4 w-4 text-primary" />
-                <span className="font-medium text-sm">Konfigurasi</span>
-              </div>
-              {configOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-            </button>
-            {configOpen && (
-              <div className="px-4 pb-4 space-y-5">
-                {/* Confidence */}
-                <div className="space-y-2">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">Confidence Threshold</span>
-                    <span className="font-mono font-medium">{confidence.toFixed(2)}</span>
-                  </div>
-                  <Slider value={[confidence]} onValueChange={([v]) => setConfidence(v)} min={0} max={1} step={0.05} />
-                </div>
-                {/* IoU */}
-                <div className="space-y-2">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">IoU Threshold</span>
-                    <span className="font-mono font-medium">{iou.toFixed(2)}</span>
-                  </div>
-                  <Slider value={[iou]} onValueChange={([v]) => setIou(v)} min={0} max={1} step={0.05} />
-                </div>
-                {/* Model size */}
-                <div className="space-y-2">
-                  <span className="text-xs text-muted-foreground">Model Size</span>
-                  <div className="flex gap-2">
-                    {(["SMALL", "MEDIUM"] as ModelSize[]).map((s) => (
-                      <button
-                        key={s}
-                        onClick={() => setModelSize(s)}
-                        className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all ${modelSize === s ? "bg-primary text-primary-foreground shadow-md" : "bg-muted/50 text-muted-foreground hover:bg-muted"}`}
-                      >
-                        {s === "SMALL" ? "SMALL (Cepat)" : "MEDIUM (Akurat)"}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-[10px] text-muted-foreground">SMALL: YOLOv11s, 19 MB — MEDIUM: YOLOv11m, 40 MB</p>
-                </div>
-              </div>
-            )}
-          </div>
 
           {/* Action buttons */}
           <div className="flex gap-3">
