@@ -1,14 +1,14 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import {
-  Radio, Play, Square, Camera, SlidersHorizontal, Info,
+  Radio, Play, Square, Camera, Info,
   Truck, Car, PersonStanding, Bike, BarChart3, Loader2,
-  AlertCircle, ChevronDown, ChevronUp, Copy, Wifi, WifiOff,
+  AlertCircle, Copy, Wifi, WifiOff,
   Eye, EyeOff, Cloud, Monitor, RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { useApiSettings } from "@/contexts/ApiContext";
+import { useDetectionConfig } from "@/contexts/DetectionConfigContext";
 import { addActivityLog } from "@/lib/activity-log";
 import { toast } from "@/hooks/use-toast";
 
@@ -47,19 +47,11 @@ interface SnapshotResponse {
   inference_config: Record<string, unknown>;
 }
 
-type ModelSize = "SMALL" | "MEDIUM";
 type StreamMode = "snapshot" | "live";
 type SourceType = "rtsp" | "ezviz";
 type StreamStatus = "idle" | "connecting" | "streaming" | "reconnecting" | "stopped" | "error";
 
 const EMPTY_COUNTS: Counts = { big_vehicle: 0, car: 0, pedestrian: 0, two_wheeler: 0, total: 0 };
-
-/* ─── Helpers ─── */
-const clampLine = (v: string): number => {
-  const n = parseFloat(v);
-  if (isNaN(n)) return 0;
-  return Math.min(1, Math.max(0, parseFloat(n.toFixed(2))));
-};
 
 const statusConfig: Record<StreamStatus, { label: string; color: string; dot: string }> = {
   idle: { label: "Belum terhubung", color: "text-muted-foreground", dot: "bg-muted-foreground" },
@@ -84,22 +76,15 @@ const LiveMonitoring = () => {
   const [channelNo, setChannelNo] = useState(1);
   const [ezvizStatus, setEzvizStatus] = useState<"unknown" | "connected" | "disconnected">("unknown");
 
-  // Config
+  // Config from shared context
+  const { confidence, iou, modelSize, lineStartX, lineStartY, lineEndX, lineEndY } = useDetectionConfig();
+
+  // Page-specific config
   const [rtspUrl, setRtspUrl] = useState("");
-  const [confidence, setConfidence] = useState(0.45);
-  const [iou, setIou] = useState(0.5);
-  const [modelSize, setModelSize] = useState<ModelSize>("SMALL");
   const [frameCount, setFrameCount] = useState(150);
   const [showVideo, setShowVideo] = useState(true);
   const [persistentRetry, setPersistentRetry] = useState(false);
   const [retryInfo, setRetryInfo] = useState<{ retrying: boolean; failures: number; message: string } | null>(null);
-
-  // Counting line
-  const [lineStartX, setLineStartX] = useState(0.0);
-  const [lineStartY, setLineStartY] = useState(0.15);
-  const [lineEndX, setLineEndX] = useState(1.0);
-  const [lineEndY, setLineEndY] = useState(0.65);
-  const [lineOpen, setLineOpen] = useState(false);
 
   // Live stream state
   const [streamStatus, setStreamStatus] = useState<StreamStatus>("idle");
@@ -496,46 +481,6 @@ const LiveMonitoring = () => {
           </div>
         )}
 
-        {/* Sliders + Model */}
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="space-y-2">
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Confidence</span>
-              <span className="font-mono font-semibold">{confidence.toFixed(2)}</span>
-            </div>
-            <Slider value={[confidence]} onValueChange={([v]) => setConfidence(v)} min={0} max={1} step={0.05} disabled={isBusy} />
-          </div>
-          <div className="space-y-2">
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">IoU</span>
-              <span className="font-mono font-semibold">{iou.toFixed(2)}</span>
-            </div>
-            <Slider value={[iou]} onValueChange={([v]) => setIou(v)} min={0} max={1} step={0.05} disabled={isBusy} />
-          </div>
-          <div className="space-y-2">
-            <span className="text-xs text-muted-foreground">Model Size</span>
-            <div className="flex gap-2">
-              {(["SMALL", "MEDIUM"] as ModelSize[]).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => !isBusy && setModelSize(s)}
-                  disabled={isBusy}
-                  className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all
-                    ${modelSize === s
-                      ? "bg-primary text-primary-foreground shadow-md"
-                      : "bg-muted/50 text-muted-foreground hover:bg-muted"}
-                    disabled:opacity-50`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-            <p className="text-[10px] text-muted-foreground">
-              {modelSize === "SMALL" ? "19 MB · Lebih cepat" : "40 MB · Lebih akurat"}
-            </p>
-          </div>
-        </div>
-
         {/* Snapshot-only: frame count */}
         {mode === "snapshot" && (
           <div className="border-t border-border/40 pt-4">
@@ -602,50 +547,15 @@ const LiveMonitoring = () => {
           </div>
         )}
 
-        {/* Counting Line (collapsible) */}
+        {/* Counting line info (read-only, configured in sidebar) */}
         <div className="border-t border-border/40 pt-4">
-          <button
-            onClick={() => setLineOpen(!lineOpen)}
-            className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Info className="h-3.5 w-3.5" />
             <span>Posisi Counting Line</span>
-            <div className="group relative ml-1">
-              <Info className="h-3 w-3 cursor-help" />
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-popover text-popover-foreground text-[10px] rounded-md shadow-lg border opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
-                Kendaraan dihitung saat melewati garis ini (persentase 0.0–1.0)
-              </div>
-            </div>
-            <span className="ml-auto text-muted-foreground/60">
+            <span className="ml-auto font-mono">
               ({lineStartX},{lineStartY}) → ({lineEndX},{lineEndY})
             </span>
-            {lineOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-          </button>
-
-          {lineOpen && (
-            <div className="mt-3 grid grid-cols-4 gap-2">
-              {[
-                { label: "Start X", val: lineStartX, set: setLineStartX },
-                { label: "Start Y", val: lineStartY, set: setLineStartY },
-                { label: "End X", val: lineEndX, set: setLineEndX },
-                { label: "End Y", val: lineEndY, set: setLineEndY },
-              ].map(({ label, val, set }) => (
-                <div key={label}>
-                  <label className="text-[10px] text-muted-foreground">{label}</label>
-                  <Input
-                    type="number"
-                    step={0.05}
-                    min={0}
-                    max={1}
-                    value={val}
-                    onChange={(e) => set(clampLine(e.target.value))}
-                    className="h-8 text-xs font-mono"
-                    disabled={isBusy}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
+          </div>
         </div>
 
         {/* ─── Action Buttons ─── */}
