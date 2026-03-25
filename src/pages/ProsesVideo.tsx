@@ -250,13 +250,17 @@ const ProsesVideo = () => {
           pollRef.current = null;
 
           if (data.status === "done" && data.counts) {
-            addActivityLog({ type: "Video", source: videoUrl, totalDeteksi: data.counts.total });
-            localStorage.setItem("last-detection-counts", JSON.stringify({
-              bigVehicle: data.counts.big_vehicle,
-              car: data.counts.car,
-              pedestrian: data.counts.pedestrian,
-              twoWheeler: data.counts.two_wheeler,
-            }));
+            addActivityLog({
+              type: "Video",
+              source: videoUrl,
+              totalDeteksi: data.counts.total,
+              counts: {
+                big_vehicle: data.counts.big_vehicle,
+                car: data.counts.car,
+                pedestrian: data.counts.pedestrian,
+                two_wheeler: data.counts.two_wheeler,
+              },
+            }, baseUrl);
           }
         }
       } catch { /* ignore transient errors */ }
@@ -413,13 +417,17 @@ const ProsesVideo = () => {
       if (endpoint === "detect") {
         const data: VideoDetectResponse = await res.json();
         setJsonResult(data);
-        addActivityLog({ type: "Video", source: file.name, totalDeteksi: data.counts.total });
-        localStorage.setItem("last-detection-counts", JSON.stringify({
-          bigVehicle: data.counts.big_vehicle,
-          car: data.counts.car,
-          pedestrian: data.counts.pedestrian,
-          twoWheeler: data.counts.two_wheeler,
-        }));
+        addActivityLog({
+          type: "Video",
+          source: file.name,
+          totalDeteksi: data.counts.total,
+          counts: {
+            big_vehicle: data.counts.big_vehicle,
+            car: data.counts.car,
+            pedestrian: data.counts.pedestrian,
+            two_wheeler: data.counts.two_wheeler,
+          },
+        }, baseUrl);
       } else {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
@@ -429,7 +437,7 @@ const ProsesVideo = () => {
           framesProcessed: res.headers.get("X-Frames-Processed") || "-",
           processingTime: res.headers.get("X-Processing-Time") || "-",
         });
-        addActivityLog({ type: "Video", source: file.name, totalDeteksi: parseInt(res.headers.get("X-Total-Count") || "0") });
+        addActivityLog({ type: "Video", source: file.name, totalDeteksi: parseInt(res.headers.get("X-Total-Count") || "0") }, baseUrl);
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Terjadi kesalahan");
