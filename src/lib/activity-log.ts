@@ -1,35 +1,46 @@
-export interface ActivityLog {
-  id: string;
-  timestamp: string;
+export interface ClassCounts {
+  big_vehicle: number;
+  car: number;
+  pedestrian: number;
+  two_wheeler: number;
+}
+
+export interface ActivityLogInput {
   type: "Gambar" | "Video" | "RTSP" | "EZVIZ";
   source: string;
   totalDeteksi: number;
+  counts?: ClassCounts;
 }
 
-const STORAGE_KEY = "traffic-detection-logs";
-
-export function getActivityLogs(): ActivityLog[] {
+/**
+ * Send activity log to backend API.
+ * Falls back silently if backend is unavailable.
+ */
+export async function addActivityLog(
+  log: ActivityLogInput,
+  baseUrl: string,
+): Promise<void> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as ActivityLog[];
+    await fetch(`${baseUrl}/logs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: log.type,
+        source: log.source,
+        total_deteksi: log.totalDeteksi,
+        counts: log.counts
+          ? {
+              big_vehicle: log.counts.big_vehicle,
+              car: log.counts.car,
+              pedestrian: log.counts.pedestrian,
+              two_wheeler: log.counts.two_wheeler,
+              total: log.totalDeteksi,
+            }
+          : null,
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
   } catch {
-    return [];
+    // Silently fail — backend may be unavailable
   }
-}
-
-export function addActivityLog(log: Omit<ActivityLog, "id" | "timestamp">) {
-  const logs = getActivityLogs();
-  const newLog: ActivityLog = {
-    id: crypto.randomUUID(),
-    timestamp: new Date().toISOString(),
-    ...log,
-  };
-  const updated = [newLog, ...logs].slice(0, 10);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-  return updated;
-}
-
-export function clearActivityLogs() {
-  localStorage.removeItem(STORAGE_KEY);
 }
