@@ -260,13 +260,17 @@ const LiveMonitoring = () => {
     if (liveCounts.total > 0) {
       const logSource = sourceType === "ezviz" ? `EZVIZ:${deviceSerial}` : rtspUrl;
       const logType = sourceType === "ezviz" ? "EZVIZ" : "RTSP";
-      addActivityLog({ type: logType, source: logSource, totalDeteksi: liveCounts.total });
-      localStorage.setItem("last-detection-counts", JSON.stringify({
-        bigVehicle: liveCounts.big_vehicle,
-        car: liveCounts.car,
-        pedestrian: liveCounts.pedestrian,
-        twoWheeler: liveCounts.two_wheeler,
-      }));
+      addActivityLog({
+        type: logType,
+        source: logSource,
+        totalDeteksi: liveCounts.total,
+        counts: {
+          big_vehicle: liveCounts.big_vehicle,
+          car: liveCounts.car,
+          pedestrian: liveCounts.pedestrian,
+          two_wheeler: liveCounts.two_wheeler,
+        },
+      }, baseUrl);
     }
   }, [sourceType, deviceSerial, rtspUrl, liveCounts]);
 
@@ -322,13 +326,17 @@ const LiveMonitoring = () => {
       setSnapshotResult(data);
       const logSource = isEzviz ? `EZVIZ:${deviceSerial}` : rtspUrl;
       const logType = isEzviz ? "EZVIZ" : "RTSP";
-      addActivityLog({ type: logType, source: logSource, totalDeteksi: data.counts.total });
-      localStorage.setItem("last-detection-counts", JSON.stringify({
-        bigVehicle: data.counts.big_vehicle,
-        car: data.counts.car,
-        pedestrian: data.counts.pedestrian,
-        twoWheeler: data.counts.two_wheeler,
-      }));
+      addActivityLog({
+        type: logType,
+        source: logSource,
+        totalDeteksi: data.counts.total,
+        counts: {
+          big_vehicle: data.counts.big_vehicle,
+          car: data.counts.car,
+          pedestrian: data.counts.pedestrian,
+          two_wheeler: data.counts.two_wheeler,
+        },
+      }, baseUrl);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Terjadi kesalahan";
       setError(msg);
