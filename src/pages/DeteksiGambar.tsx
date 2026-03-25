@@ -107,14 +107,18 @@ const DeteksiGambar = () => {
         const data: DetectResponse = await res.json();
         setJsonResult(data);
         setResultMode("json");
-        // Save to activity log & last detection counts
-        addActivityLog({ type: "Gambar", source: file.name, totalDeteksi: data.summary.total });
-        localStorage.setItem("last-detection-counts", JSON.stringify({
-          bigVehicle: data.summary.big_vehicle,
-          car: data.summary.car,
-          pedestrian: data.summary.pedestrian,
-          twoWheeler: data.summary.two_wheeler,
-        }));
+        // Save to activity log
+        addActivityLog({
+          type: "Gambar",
+          source: file.name,
+          totalDeteksi: data.summary.total,
+          counts: {
+            big_vehicle: data.summary.big_vehicle,
+            car: data.summary.car,
+            pedestrian: data.summary.pedestrian,
+            two_wheeler: data.summary.two_wheeler,
+          },
+        }, baseUrl);
       } else {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
@@ -122,7 +126,7 @@ const DeteksiGambar = () => {
         setResultMode("annotate");
         const count = res.headers.get("X-Detections-Count");
         setDetectionsCount(count ? parseInt(count) : null);
-        addActivityLog({ type: "Gambar", source: file.name, totalDeteksi: count ? parseInt(count) : 0 });
+        addActivityLog({ type: "Gambar", source: file.name, totalDeteksi: count ? parseInt(count) : 0 }, baseUrl);
       }
     } catch (err: any) {
       setError(err.message || "Terjadi kesalahan");
