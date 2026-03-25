@@ -1,10 +1,33 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Truck, Car, PersonStanding, Bike, BarChart3, Camera, Film, Radio, Server, Trash2, ExternalLink } from "lucide-react";
+import { Truck, Car, PersonStanding, Bike, BarChart3, Camera, Film, Radio, Server, Trash2, ExternalLink, Download } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useApiSettings } from "@/contexts/ApiContext";
-import { getActivityLogs, clearActivityLogs, type ActivityLog } from "@/lib/activity-log";
 import { Button } from "@/components/ui/button";
+
+/* ─── Types ─── */
+interface BackendLog {
+  id: string;
+  timestamp: string;
+  type: string;
+  source: string;
+  total_deteksi: number;
+  counts?: { big_vehicle: number; car: number; pedestrian: number; two_wheeler: number; total: number } | null;
+}
+
+interface HourlyStat {
+  hour: string;
+  big_vehicle: number;
+  car: number;
+  pedestrian: number;
+  two_wheeler: number;
+}
+
+interface SummaryStats {
+  counts: { big_vehicle: number; car: number; pedestrian: number; two_wheeler: number; total: number };
+  total_logs: number;
+  total_deteksi: number;
+}
 
 /* ─── Section wrapper with staggered animation ─── */
 const Section = ({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) => (
@@ -67,8 +90,6 @@ const DONUT_COLORS = [
   "hsl(258, 90%, 66%)",   // purple - two-wheeler
 ];
 
-const CLASS_LABELS = ["Big Vehicle", "Mobil (Car)", "Pejalan Kaki", "Kendaraan Roda Dua"];
-
 /* ─── Quick Action Card ─── */
 const QuickAction = ({ icon: Icon, title, description, to }: { icon: React.ElementType; title: string; description: string; to: string }) => {
   const navigate = useNavigate();
@@ -90,37 +111,6 @@ const QuickAction = ({ icon: Icon, title, description, to }: { icon: React.Eleme
     </button>
   );
 };
-
-/* ─── Build hourly chart data from activity logs ─── */
-function buildHourlyData(logs: ActivityLog[]) {
-  const hourMap: Record<string, { bigVehicle: number; car: number; pedestrian: number; twoWheeler: number }> = {};
-
-  // Initialize hours 08:00 - 17:00
-  for (let h = 8; h <= 17; h++) {
-    const key = `${h.toString().padStart(2, "0")}:00`;
-    hourMap[key] = { bigVehicle: 0, car: 0, pedestrian: 0, twoWheeler: 0 };
-  }
-
-  // Aggregate logs by hour
-  logs.forEach((log) => {
-    const date = new Date(log.timestamp);
-    const hour = date.getHours();
-    const key = `${hour.toString().padStart(2, "0")}:00`;
-    if (hourMap[key]) {
-      // Distribute detection counts roughly
-      const counts = log.totalDeteksi || 0;
-      hourMap[key].car += Math.round(counts * 0.4);
-      hourMap[key].twoWheeler += Math.round(counts * 0.3);
-      hourMap[key].pedestrian += Math.round(counts * 0.2);
-      hourMap[key].bigVehicle += Math.round(counts * 0.1);
-    }
-  });
-
-  return Object.entries(hourMap).map(([hour, counts]) => ({
-    hour,
-    ...counts,
-  }));
-}
 
 /* ─── Custom Tooltip for Charts ─── */
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -164,11 +154,29 @@ const DonutLegend = ({ data }: { data: { name: string; value: number; percentage
   );
 };
 
+/* ─── Export logs as CSV ─── */
+function exportLogsAsCSV(logs: BackendLog[]): void {
+  const header = "Waktu,Tipe,Source,Total,Big Vehicle,Car,Pedestrian,Two Wheeler\n";
+  const rows = logs.map((l) =>
+    `${l.timestamp},${l.type},"${l.source}",${l.total_deteksi},${l.counts?.big_vehicle ?? ""},${l.counts?.car ?? ""},${l.counts?.pedestrian ?? ""},${l.counts?.two_wheeler ?? ""}`
+  );
+  const csv = header + rows.join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `activity-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 /* ─── Main Dashboard ─── */
 const Dashboard = () => {
   const { baseUrl, isConnected } = useApiSettings();
-  const [systemInfo, setSystemInfo] = useState<{ model?: string; device?: string; version?: string; endpoints?: string[] } | null>(null);
-  const [logs, setLogs] = useState<ActivityLog[]>([]);
+  const [systemInfo, setSystemInfo] = useState<{ model?: string; device?: string; version?: string; endpoints?: Record<string, string> } | null>(null);
+  const [logs, setLogs] = useState<BackendLog[]>([]);
+  const [summary, setSummary] = useState<SummaryStats | null>(null);
+  const [hourlyData, setHourlyData] = useState<HourlyStat[]>([]);
   const [chartMode, setChartMode] = useState<"bar" | "line" | "daily">("bar");
 
   // Fetch system info
@@ -187,43 +195,88 @@ const Dashboard = () => {
     fetchInfo();
   }, [baseUrl]);
 
-  // Load logs
-  useEffect(() => {
-    setLogs(getActivityLogs());
-  }, []);
-
-  const handleClearLogs = useCallback(() => {
-    clearActivityLogs();
-    setLogs([]);
-  }, []);
-
-  // Last detection counts
-  const lastDetection = (() => {
+  // Fetch logs from backend
+  const fetchLogs = useCallback(async () => {
     try {
-      const raw = localStorage.getItem("last-detection-counts");
-      if (raw) return JSON.parse(raw);
+      const res = await fetch(`${baseUrl}/logs?limit=50`, { signal: AbortSignal.timeout(5000) });
+      if (res.ok) {
+        const data: BackendLog[] = await res.json();
+        setLogs(data);
+      }
+    } catch {
+      setLogs([]);
+    }
+  }, [baseUrl]);
+
+  // Fetch summary stats from backend
+  const fetchSummary = useCallback(async () => {
+    try {
+      const res = await fetch(`${baseUrl}/stats/summary`, { signal: AbortSignal.timeout(5000) });
+      if (res.ok) {
+        const data: SummaryStats = await res.json();
+        setSummary(data);
+      }
+    } catch {
+      setSummary(null);
+    }
+  }, [baseUrl]);
+
+  // Fetch hourly stats from backend
+  const fetchHourly = useCallback(async () => {
+    try {
+      const res = await fetch(`${baseUrl}/stats/hourly`, { signal: AbortSignal.timeout(5000) });
+      if (res.ok) {
+        const data: HourlyStat[] = await res.json();
+        setHourlyData(data);
+      }
+    } catch {
+      setHourlyData([]);
+    }
+  }, [baseUrl]);
+
+  useEffect(() => {
+    fetchLogs();
+    fetchSummary();
+    fetchHourly();
+  }, [fetchLogs, fetchSummary, fetchHourly]);
+
+  const handleClearLogs = useCallback(async () => {
+    try {
+      await fetch(`${baseUrl}/logs`, { method: "DELETE" });
+      setLogs([]);
+      fetchSummary();
+      fetchHourly();
     } catch { /* empty */ }
-    return { bigVehicle: 0, car: 0, pedestrian: 0, twoWheeler: 0 };
-  })();
+  }, [baseUrl, fetchSummary, fetchHourly]);
 
-  const total = lastDetection.bigVehicle + lastDetection.car + lastDetection.pedestrian + lastDetection.twoWheeler;
+  // Summary counts
+  const counts = summary?.counts ?? { big_vehicle: 0, car: 0, pedestrian: 0, two_wheeler: 0, total: 0 };
 
-  // Chart data
-  const hourlyData = useMemo(() => buildHourlyData(logs), [logs]);
+  // Chart data - transform for recharts keys
+  const chartData = useMemo(() => hourlyData.map((h) => ({
+    hour: h.hour,
+    bigVehicle: h.big_vehicle,
+    car: h.car,
+    pedestrian: h.pedestrian,
+    twoWheeler: h.two_wheeler,
+  })), [hourlyData]);
 
   const donutData = useMemo(() => {
     const items = [
-      { name: "Big Vehicle", value: lastDetection.bigVehicle },
-      { name: "Mobil (Car)", value: lastDetection.car },
-      { name: "Pejalan Kaki", value: lastDetection.pedestrian },
-      { name: "Kendaraan Roda Dua", value: lastDetection.twoWheeler },
+      { name: "Big Vehicle", value: counts.big_vehicle },
+      { name: "Mobil (Car)", value: counts.car },
+      { name: "Pejalan Kaki", value: counts.pedestrian },
+      { name: "Kendaraan Roda Dua", value: counts.two_wheeler },
     ];
     const t = items.reduce((s, d) => s + d.value, 0);
     return items.map((d) => ({
       ...d,
       percentage: t > 0 ? `${Math.round((d.value / t) * 100)}%` : "0%",
     }));
-  }, [lastDetection]);
+  }, [counts]);
+
+  // Endpoints as array from object
+  const endpointList = systemInfo?.endpoints ? Object.values(systemInfo.endpoints) : [];
 
   return (
     <div className="space-y-8">
@@ -239,15 +292,15 @@ const Dashboard = () => {
           <StatCard
             icon={BarChart3}
             label="Total Kendaraan"
-            value={total}
+            value={counts.total}
             colorVar="var(--traffic-green)"
             className="gradient-total"
             gradient
           />
-          <StatCard icon={Truck} label="Big Vehicle" value={lastDetection.bigVehicle} colorVar="var(--traffic-blue)" />
-          <StatCard icon={Car} label="Car" value={lastDetection.car} colorVar="var(--traffic-green)" />
-          <StatCard icon={PersonStanding} label="Pedestrian" value={lastDetection.pedestrian} colorVar="var(--traffic-amber)" />
-          <StatCard icon={Bike} label="Bike" value={lastDetection.twoWheeler} colorVar="var(--traffic-purple)" />
+          <StatCard icon={Truck} label="Big Vehicle" value={counts.big_vehicle} colorVar="var(--traffic-blue)" />
+          <StatCard icon={Car} label="Car" value={counts.car} colorVar="var(--traffic-green)" />
+          <StatCard icon={PersonStanding} label="Pedestrian" value={counts.pedestrian} colorVar="var(--traffic-amber)" />
+          <StatCard icon={Bike} label="Bike" value={counts.two_wheeler} colorVar="var(--traffic-purple)" />
         </div>
       </Section>
 
@@ -270,7 +323,7 @@ const Dashboard = () => {
             <div className="h-[280px]">
               <ResponsiveContainer width="100%" height="100%">
                 {chartMode === "line" ? (
-                  <LineChart data={hourlyData}>
+                  <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 16%, 22%)" />
                     <XAxis dataKey="hour" tick={{ fontSize: 11, fill: "hsl(215, 14%, 55%)" }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 11, fill: "hsl(215, 14%, 55%)" }} axisLine={false} tickLine={false} />
@@ -282,7 +335,7 @@ const Dashboard = () => {
                     <Line type="monotone" dataKey="twoWheeler" name="Kendaraan Roda Dua" stroke="hsl(258, 90%, 66%)" strokeWidth={2} dot={false} />
                   </LineChart>
                 ) : (
-                  <BarChart data={hourlyData}>
+                  <BarChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 16%, 22%)" />
                     <XAxis dataKey="hour" tick={{ fontSize: 11, fill: "hsl(215, 14%, 55%)" }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 11, fill: "hsl(215, 14%, 55%)" }} axisLine={false} tickLine={false} />
@@ -356,11 +409,11 @@ const Dashboard = () => {
               </div>
             </div>
           </div>
-          {systemInfo?.endpoints && systemInfo.endpoints.length > 0 && (
+          {endpointList.length > 0 && (
             <div className="mt-4 pt-4 border-t border-border/40">
               <p className="text-xs font-medium text-muted-foreground mb-2">Endpoint Tersedia</p>
               <div className="flex flex-wrap gap-2">
-                {systemInfo.endpoints.map((ep: string) => (
+                {endpointList.map((ep) => (
                   <span key={ep} className="inline-flex items-center gap-1 rounded-lg bg-muted/60 px-2.5 py-1 text-xs font-mono text-muted-foreground">
                     <Server className="h-3 w-3" />
                     {ep}
@@ -378,7 +431,7 @@ const Dashboard = () => {
         <div className="grid gap-4 sm:grid-cols-3">
           <QuickAction icon={Camera} title="Deteksi Gambar" description="Upload foto untuk analisis cepat" to="/deteksi-gambar" />
           <QuickAction icon={Film} title="Proses Video" description="Upload video untuk counting kendaraan" to="/proses-video" />
-          <QuickAction icon={Radio} title="Live Monitoring" description="Upload foto untuk analisis cepat" to="/live-monitoring" />
+          <QuickAction icon={Radio} title="Live Monitoring" description="Koneksi ke CCTV untuk monitoring real-time" to="/live-monitoring" />
         </div>
       </Section>
 
@@ -386,12 +439,20 @@ const Dashboard = () => {
       <Section delay={500}>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold">Log Aktivitas Terbaru</h2>
-          {logs.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={handleClearLogs} className="text-muted-foreground hover:text-destructive">
-              <Trash2 className="h-4 w-4 mr-1.5" />
-              Clean Logs
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {logs.length > 0 && (
+              <>
+                <Button variant="ghost" size="sm" onClick={() => exportLogsAsCSV(logs)} className="text-muted-foreground hover:text-primary">
+                  <Download className="h-4 w-4 mr-1.5" />
+                  Export CSV
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleClearLogs} className="text-muted-foreground hover:text-destructive">
+                  <Trash2 className="h-4 w-4 mr-1.5" />
+                  Clean Logs
+                </Button>
+              </>
+            )}
+          </div>
         </div>
         <div className="glass-card rounded-xl overflow-hidden">
           {logs.length === 0 ? (
@@ -419,7 +480,7 @@ const Dashboard = () => {
                         <TypeBadge type={log.type} />
                       </td>
                       <td className="px-4 py-3 font-mono text-xs truncate max-w-[200px]">{log.source}</td>
-                      <td className="px-4 py-3 text-right font-semibold">{log.totalDeteksi}</td>
+                      <td className="px-4 py-3 text-right font-semibold">{log.total_deteksi}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -444,6 +505,7 @@ const typeColors: Record<string, string> = {
   Gambar: "bg-traffic-blue/15 text-traffic-blue",
   Video: "bg-traffic-purple/15 text-traffic-purple",
   RTSP: "bg-traffic-amber/15 text-traffic-amber",
+  EZVIZ: "bg-traffic-green/15 text-traffic-green",
 };
 
 const TypeBadge = ({ type }: { type: string }) => (
