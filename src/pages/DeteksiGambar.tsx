@@ -152,198 +152,196 @@ const DeteksiGambar = () => {
   }, [annotatedUrl, file]);
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="opacity-0 animate-fade-in-up">
+      <div className="opacity-0 animate-fade-in-up shrink-0">
         <h1 className="text-2xl font-bold">Deteksi Gambar</h1>
         <p className="text-muted-foreground text-sm mt-1">Upload gambar untuk mendeteksi dan menghitung kendaraan</p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2 opacity-0 animate-fade-in-up" style={{ animationDelay: "100ms" }}>
-        {/* ═══ LEFT COLUMN ═══ */}
-        <div className="space-y-4">
-          {/* Drop zone */}
-          <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/bmp,image/tiff" className="hidden" onChange={handleInputChange} />
+      {/* Content — scrollable */}
+      <div className="flex-1 overflow-y-auto mt-6 space-y-6 opacity-0 animate-fade-in-up" style={{ animationDelay: "100ms" }}>
+        {/* Drop zone */}
+        <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/bmp,image/tiff" className="hidden" onChange={handleInputChange} />
 
-          {!preview ? (
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              onDrop={handleDrop}
-              onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-              onDragLeave={() => setIsDragOver(false)}
-              className={`glass-card rounded-xl w-full p-12 flex flex-col items-center justify-center text-center border-2 border-dashed transition-all duration-300 cursor-pointer ${isDragOver ? "border-primary bg-primary/5 scale-[1.01]" : "border-border/60 hover:border-primary/40"}`}
-            >
-              <div className="rounded-2xl bg-primary/10 p-4 mb-4">
-                <Upload className="h-8 w-8 text-primary" />
-              </div>
-              <h3 className="font-semibold mb-1">Seret gambar ke sini atau klik untuk memilih</h3>
-              <p className="text-xs text-muted-foreground">Format: JPEG, PNG, BMP, TIFF</p>
-            </button>
-          ) : (
-            <div className="glass-card rounded-xl p-4 relative group">
-              <button onClick={resetFile} className="absolute top-2 right-2 z-10 rounded-lg bg-background/80 p-1.5 text-muted-foreground hover:text-destructive transition-colors">
-                <X className="h-4 w-4" />
-              </button>
-              <img src={preview} alt="Preview" className="w-full rounded-lg object-contain max-h-64" />
-              <p className="text-xs text-muted-foreground mt-2 truncate">{file?.name}</p>
+        {!preview ? (
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            onDrop={handleDrop}
+            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+            onDragLeave={() => setIsDragOver(false)}
+            className={`glass-card rounded-xl w-full p-16 flex flex-col items-center justify-center text-center border-2 border-dashed transition-all duration-300 cursor-pointer ${isDragOver ? "border-primary bg-primary/5 scale-[1.01]" : "border-border/60 hover:border-primary/40"}`}
+          >
+            <div className="rounded-2xl bg-primary/10 p-4 mb-4">
+              <Upload className="h-8 w-8 text-primary" />
             </div>
-          )}
+            <h3 className="font-semibold mb-1">Seret gambar ke sini atau klik untuk memilih</h3>
+            <p className="text-xs text-muted-foreground">Format: JPEG, PNG, BMP, TIFF</p>
+          </button>
+        ) : (
+          <div className="glass-card rounded-xl p-4 relative group">
+            <button onClick={resetFile} className="absolute top-2 right-2 z-10 rounded-lg bg-background/80 p-1.5 text-muted-foreground hover:text-destructive transition-colors">
+              <X className="h-4 w-4" />
+            </button>
+            <img src={preview} alt="Preview" className="w-full rounded-lg object-contain max-h-80" />
+            <p className="text-xs text-muted-foreground mt-2 truncate">{file?.name}</p>
+          </div>
+        )}
 
-          {/* Action buttons */}
-          <div className="flex gap-3">
-            <Button onClick={() => callApi("detect")} disabled={!file || loading} className="flex-1 gap-2">
-              {loading && resultMode !== "annotate" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-              Deteksi
-            </Button>
-            <Button onClick={() => callApi("annotate")} disabled={!file || loading} variant="outline" className="flex-1 gap-2">
-              {loading && resultMode === "annotate" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
-              Deteksi + Anotasi
+        {/* Results area */}
+        {/* Error */}
+        {error && (
+          <div className="glass-card rounded-xl p-4 border-destructive/50 bg-destructive/10 flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-destructive">Gagal menghubungi API</p>
+              <p className="text-xs text-muted-foreground mt-1">{error}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Loading */}
+        {loading && (
+          <div className="glass-card rounded-xl p-12 flex flex-col items-center justify-center gap-3">
+            <Loader2 className="h-8 w-8 text-primary animate-spin" />
+            <p className="text-sm text-muted-foreground">Memproses gambar...</p>
+          </div>
+        )}
+
+        {/* JSON Results */}
+        {!loading && resultMode === "json" && jsonResult && (
+          <div className="space-y-4 opacity-0 animate-fade-in-up">
+            {/* Summary cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <SummaryCard icon={Truck} label="Big Vehicle" value={jsonResult.summary.big_vehicle} colorVar="var(--traffic-blue)" />
+              <SummaryCard icon={Car} label="Car" value={jsonResult.summary.car} colorVar="var(--traffic-green)" />
+              <SummaryCard icon={PersonStanding} label="Pedestrian" value={jsonResult.summary.pedestrian} colorVar="var(--traffic-amber)" />
+              <SummaryCard icon={Bike} label="Two Wheeler" value={jsonResult.summary.two_wheeler} colorVar="var(--traffic-purple)" />
+            </div>
+            <div className="glass-card rounded-xl p-4 gradient-total flex items-center gap-3">
+              <BarChart3 className="h-5 w-5 text-primary" />
+              <div>
+                <p className="text-xs text-muted-foreground">Total Kendaraan</p>
+                <p className="text-2xl font-bold">{jsonResult.summary.total}</p>
+              </div>
+            </div>
+
+            {/* Detections table */}
+            {jsonResult.detections.length > 0 && (
+              <div className="glass-card rounded-xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-border/40">
+                  <p className="text-sm font-medium">Detail Deteksi ({jsonResult.detections.length})</p>
+                </div>
+                <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-card/90 backdrop-blur">
+                      <tr className="border-b border-border/40 text-left">
+                        <th className="px-4 py-2 font-medium text-muted-foreground">Class</th>
+                        <th className="px-4 py-2 font-medium text-muted-foreground">Confidence</th>
+                        <th className="px-4 py-2 font-medium text-muted-foreground">Bounding Box</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {jsonResult.detections.map((d, i) => (
+                        <tr key={i} className="border-b border-border/20 last:border-0 hover:bg-muted/30 transition-colors">
+                          <td className="px-4 py-2 font-medium">{d.class_name}</td>
+                          <td className="px-4 py-2">
+                            <span className="font-mono">{(d.confidence * 100).toFixed(1)}%</span>
+                          </td>
+                          <td className="px-4 py-2 font-mono text-muted-foreground">
+                            ({Math.round(d.bbox.x1)}, {Math.round(d.bbox.y1)}, {Math.round(d.bbox.x2)}, {Math.round(d.bbox.y2)})
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Inference config */}
+            <div className="glass-card rounded-xl p-4">
+              <p className="text-xs font-medium text-muted-foreground mb-3">Konfigurasi Inference</p>
+              <div className="grid grid-cols-3 gap-3 text-xs">
+                <div className="flex items-center gap-2">
+                  <Cpu className="h-3.5 w-3.5 text-primary" />
+                  <div>
+                    <p className="text-muted-foreground">Model</p>
+                    <p className="font-medium">{jsonResult.inference_config.model}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Monitor className="h-3.5 w-3.5 text-primary" />
+                  <div>
+                    <p className="text-muted-foreground">Device</p>
+                    <p className="font-medium">{jsonResult.inference_config.device}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Maximize className="h-3.5 w-3.5 text-primary" />
+                  <div>
+                    <p className="text-muted-foreground">Image Size</p>
+                    <p className="font-medium">{jsonResult.inference_config.image_size}px</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Copy button */}
+            <Button variant="outline" size="sm" onClick={copyJson} className="gap-2">
+              <Copy className="h-3.5 w-3.5" /> Copy JSON
             </Button>
           </div>
-        </div>
+        )}
 
-        {/* ═══ RIGHT COLUMN ═══ */}
-        <div className="space-y-4">
-          {/* Error */}
-          {error && (
-            <div className="glass-card rounded-xl p-4 border-destructive/50 bg-destructive/10 flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-destructive">Gagal menghubungi API</p>
-                <p className="text-xs text-muted-foreground mt-1">{error}</p>
+        {/* Annotate Results */}
+        {!loading && resultMode === "annotate" && annotatedUrl && (
+          <div className="space-y-4 opacity-0 animate-fade-in-up">
+            {detectionsCount !== null && (
+              <div className="glass-card rounded-xl p-3 flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-primary" />
+                <span className="text-sm"><span className="font-bold">{detectionsCount}</span> objek terdeteksi</span>
+              </div>
+            )}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="glass-card rounded-xl p-3">
+                <p className="text-xs text-muted-foreground mb-2">Original</p>
+                {preview && <img src={preview} alt="Original" className="w-full rounded-lg object-contain max-h-72" />}
+              </div>
+              <div className="glass-card rounded-xl p-3">
+                <p className="text-xs text-muted-foreground mb-2">Annotated</p>
+                <img src={annotatedUrl} alt="Annotated" className="w-full rounded-lg object-contain max-h-72" />
               </div>
             </div>
-          )}
+            <Button variant="outline" size="sm" onClick={downloadAnnotated} className="gap-2">
+              <Download className="h-3.5 w-3.5" /> Download Gambar
+            </Button>
+          </div>
+        )}
 
-          {/* Loading */}
-          {loading && (
-            <div className="glass-card rounded-xl p-12 flex flex-col items-center justify-center gap-3">
-              <Loader2 className="h-8 w-8 text-primary animate-spin" />
-              <p className="text-sm text-muted-foreground">Memproses gambar...</p>
+        {/* Empty state */}
+        {!loading && !resultMode && !error && (
+          <div className="glass-card rounded-xl p-16 flex flex-col items-center justify-center text-center">
+            <div className="rounded-2xl bg-muted/50 p-4 mb-4">
+              <ImageIcon className="h-8 w-8 text-muted-foreground" />
             </div>
-          )}
+            <h3 className="font-semibold mb-1 text-muted-foreground">Belum ada Hasil</h3>
+            <p className="text-xs text-muted-foreground max-w-xs">Upload gambar dan tekan tombol deteksi untuk melihat hasil di sini.</p>
+          </div>
+        )}
+      </div>
 
-          {/* JSON Results */}
-          {!loading && resultMode === "json" && jsonResult && (
-            <div className="space-y-4 opacity-0 animate-fade-in-up">
-              {/* Summary cards */}
-              <div className="grid grid-cols-2 gap-3">
-                <SummaryCard icon={Truck} label="Big Vehicle" value={jsonResult.summary.big_vehicle} colorVar="var(--traffic-blue)" />
-                <SummaryCard icon={Car} label="Car" value={jsonResult.summary.car} colorVar="var(--traffic-green)" />
-                <SummaryCard icon={PersonStanding} label="Pedestrian" value={jsonResult.summary.pedestrian} colorVar="var(--traffic-amber)" />
-                <SummaryCard icon={Bike} label="Two Wheeler" value={jsonResult.summary.two_wheeler} colorVar="var(--traffic-purple)" />
-              </div>
-              <div className="glass-card rounded-xl p-4 gradient-total flex items-center gap-3">
-                <BarChart3 className="h-5 w-5 text-primary" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Total Kendaraan</p>
-                  <p className="text-2xl font-bold">{jsonResult.summary.total}</p>
-                </div>
-              </div>
-
-              {/* Detections table */}
-              {jsonResult.detections.length > 0 && (
-                <div className="glass-card rounded-xl overflow-hidden">
-                  <div className="px-4 py-3 border-b border-border/40">
-                    <p className="text-sm font-medium">Detail Deteksi ({jsonResult.detections.length})</p>
-                  </div>
-                  <div className="overflow-x-auto max-h-64 overflow-y-auto">
-                    <table className="w-full text-xs">
-                      <thead className="sticky top-0 bg-card/90 backdrop-blur">
-                        <tr className="border-b border-border/40 text-left">
-                          <th className="px-4 py-2 font-medium text-muted-foreground">Class</th>
-                          <th className="px-4 py-2 font-medium text-muted-foreground">Confidence</th>
-                          <th className="px-4 py-2 font-medium text-muted-foreground">Bounding Box</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {jsonResult.detections.map((d, i) => (
-                          <tr key={i} className="border-b border-border/20 last:border-0 hover:bg-muted/30 transition-colors">
-                            <td className="px-4 py-2 font-medium">{d.class_name}</td>
-                            <td className="px-4 py-2">
-                              <span className="font-mono">{(d.confidence * 100).toFixed(1)}%</span>
-                            </td>
-                            <td className="px-4 py-2 font-mono text-muted-foreground">
-                              ({Math.round(d.bbox.x1)}, {Math.round(d.bbox.y1)}, {Math.round(d.bbox.x2)}, {Math.round(d.bbox.y2)})
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* Inference config */}
-              <div className="glass-card rounded-xl p-4">
-                <p className="text-xs font-medium text-muted-foreground mb-3">Konfigurasi Inference</p>
-                <div className="grid grid-cols-3 gap-3 text-xs">
-                  <div className="flex items-center gap-2">
-                    <Cpu className="h-3.5 w-3.5 text-primary" />
-                    <div>
-                      <p className="text-muted-foreground">Model</p>
-                      <p className="font-medium">{jsonResult.inference_config.model}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Monitor className="h-3.5 w-3.5 text-primary" />
-                    <div>
-                      <p className="text-muted-foreground">Device</p>
-                      <p className="font-medium">{jsonResult.inference_config.device}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Maximize className="h-3.5 w-3.5 text-primary" />
-                    <div>
-                      <p className="text-muted-foreground">Image Size</p>
-                      <p className="font-medium">{jsonResult.inference_config.image_size}px</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Copy button */}
-              <Button variant="outline" size="sm" onClick={copyJson} className="gap-2">
-                <Copy className="h-3.5 w-3.5" /> Copy JSON
-              </Button>
-            </div>
-          )}
-
-          {/* Annotate Results */}
-          {!loading && resultMode === "annotate" && annotatedUrl && (
-            <div className="space-y-4 opacity-0 animate-fade-in-up">
-              {detectionsCount !== null && (
-                <div className="glass-card rounded-xl p-3 flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4 text-primary" />
-                  <span className="text-sm"><span className="font-bold">{detectionsCount}</span> objek terdeteksi</span>
-                </div>
-              )}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="glass-card rounded-xl p-3">
-                  <p className="text-xs text-muted-foreground mb-2">Original</p>
-                  {preview && <img src={preview} alt="Original" className="w-full rounded-lg object-contain max-h-72" />}
-                </div>
-                <div className="glass-card rounded-xl p-3">
-                  <p className="text-xs text-muted-foreground mb-2">Annotated</p>
-                  <img src={annotatedUrl} alt="Annotated" className="w-full rounded-lg object-contain max-h-72" />
-                </div>
-              </div>
-              <Button variant="outline" size="sm" onClick={downloadAnnotated} className="gap-2">
-                <Download className="h-3.5 w-3.5" /> Download Gambar
-              </Button>
-            </div>
-          )}
-
-          {/* Empty state */}
-          {!loading && !resultMode && !error && (
-            <div className="glass-card rounded-xl p-12 flex flex-col items-center justify-center text-center">
-              <div className="rounded-2xl bg-muted/50 p-4 mb-4">
-                <ImageIcon className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <h3 className="font-semibold mb-1 text-muted-foreground">Belum Ada Hasil</h3>
-              <p className="text-xs text-muted-foreground max-w-xs">Upload gambar dan tekan tombol deteksi untuk melihat hasil di sini.</p>
-            </div>
-          )}
+      {/* Action buttons — sticky at bottom */}
+      <div className="shrink-0 pt-4 mt-auto">
+        <div className="flex gap-3">
+          <Button onClick={() => callApi("detect")} disabled={!file || loading} className="flex-1 gap-2 h-12 text-base">
+            {loading && resultMode !== "annotate" ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
+            Deteksi
+          </Button>
+          <Button onClick={() => callApi("annotate")} disabled={!file || loading} className="flex-1 gap-2 h-12 text-base bg-primary hover:bg-primary/90">
+            {loading && resultMode === "annotate" ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImageIcon className="h-5 w-5" />}
+            Deteksi + Anotasi
+          </Button>
         </div>
       </div>
     </div>
