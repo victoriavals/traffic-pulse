@@ -25,6 +25,11 @@ export function AppSidebar() {
   const config = useDetectionConfig();
   const [configOpen, setConfigOpen] = useState(true);
 
+  const isDashboard = location.pathname === "/";
+  const isImagePage = location.pathname === "/deteksi-gambar";
+  const showLineConfig = !isDashboard && !isImagePage;
+  const configDisabled = isDashboard;
+
   return (
     <>
       {/* Mobile overlay */}
@@ -81,7 +86,7 @@ export function AppSidebar() {
             </button>
 
             {configOpen && (
-              <div className="px-4 pb-4 space-y-5">
+              <div className={cn("px-4 pb-4 space-y-5", configDisabled && "opacity-40 pointer-events-none")}>
                 {/* Confidence */}
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs">
@@ -137,69 +142,71 @@ export function AppSidebar() {
                   </div>
                 </div>
 
-                {/* Counting Line Position */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-muted-foreground">Posisi Garis Penghitung (0.0 - 1.0)</span>
-                    <div className="group relative">
-                      <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-popover text-popover-foreground text-[10px] rounded-md shadow-lg border opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
-                        Kendaraan dihitung saat melewati garis ini
+                {/* Counting Line Position — only for video/live pages */}
+                {showLineConfig && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-muted-foreground">Posisi Garis Penghitung (0.0 - 1.0)</span>
+                      <div className="group relative">
+                        <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-popover text-popover-foreground text-[10px] rounded-md shadow-lg border opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
+                          Kendaraan dihitung saat melewati garis ini
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">Start X</label>
+                        <Input
+                          type="number"
+                          step={0.05}
+                          min={0}
+                          max={1}
+                          value={config.lineStartX}
+                          onChange={(e) => config.setLineStartX(clampLine(e.target.value))}
+                          className="h-8 text-xs font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">End X</label>
+                        <Input
+                          type="number"
+                          step={0.05}
+                          min={0}
+                          max={1}
+                          value={config.lineEndX}
+                          onChange={(e) => config.setLineEndX(clampLine(e.target.value))}
+                          className="h-8 text-xs font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">Start Y</label>
+                        <Input
+                          type="number"
+                          step={0.05}
+                          min={0}
+                          max={1}
+                          value={config.lineStartY}
+                          onChange={(e) => config.setLineStartY(clampLine(e.target.value))}
+                          className="h-8 text-xs font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground">End Y</label>
+                        <Input
+                          type="number"
+                          step={0.05}
+                          min={0}
+                          max={1}
+                          value={config.lineEndY}
+                          onChange={(e) => config.setLineEndY(clampLine(e.target.value))}
+                          className="h-8 text-xs font-mono"
+                        />
                       </div>
                     </div>
                   </div>
-
-                  <div className="space-y-2">
-                    <div>
-                      <label className="text-[10px] text-muted-foreground">Start X</label>
-                      <Input
-                        type="number"
-                        step={0.05}
-                        min={0}
-                        max={1}
-                        value={config.lineStartX}
-                        onChange={(e) => config.setLineStartX(clampLine(e.target.value))}
-                        className="h-8 text-xs font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-muted-foreground">End X</label>
-                      <Input
-                        type="number"
-                        step={0.05}
-                        min={0}
-                        max={1}
-                        value={config.lineEndX}
-                        onChange={(e) => config.setLineEndX(clampLine(e.target.value))}
-                        className="h-8 text-xs font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-muted-foreground">Start Y</label>
-                      <Input
-                        type="number"
-                        step={0.05}
-                        min={0}
-                        max={1}
-                        value={config.lineStartY}
-                        onChange={(e) => config.setLineStartY(clampLine(e.target.value))}
-                        className="h-8 text-xs font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-muted-foreground">End Y</label>
-                      <Input
-                        type="number"
-                        step={0.05}
-                        min={0}
-                        max={1}
-                        value={config.lineEndY}
-                        onChange={(e) => config.setLineEndY(clampLine(e.target.value))}
-                        className="h-8 text-xs font-mono"
-                      />
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
             )}
           </div>
