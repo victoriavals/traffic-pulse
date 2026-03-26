@@ -8,7 +8,7 @@ export default function DashboardLayout() {
       <AppSidebar />
       <div className="flex flex-1 flex-col min-w-0">
         <TopBar />
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-6 overflow-hidden flex flex-col">
           <Outlet />
         </main>
       </div>
