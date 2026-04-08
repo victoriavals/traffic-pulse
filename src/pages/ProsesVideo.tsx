@@ -356,7 +356,16 @@ const ProsesVideo = () => {
       const res = await fetch(`${baseUrl}/video/preview-frame?url=${encodeURIComponent(videoUrl.trim())}`, {
         method: "POST",
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        let detail = `Gagal mengambil preview (HTTP ${res.status})`;
+        try {
+          const body = await res.json();
+          if (body?.detail) detail = body.detail;
+        } catch { /* ignore parse error */ }
+        toast({ title: "Preview gagal", description: detail, variant: "destructive" });
+        setFrameLoading(false);
+        return;
+      }
 
       const blob = await res.blob();
       const imgUrl = URL.createObjectURL(blob);
@@ -370,7 +379,8 @@ const ProsesVideo = () => {
         setFrameLoading(false);
       };
       img.src = imgUrl;
-    } catch {
+    } catch (err) {
+      toast({ title: "Preview gagal", description: String(err), variant: "destructive" });
       setFrameLoading(false);
     }
   }, [videoUrl, baseUrl]);
@@ -714,13 +724,53 @@ const ProsesVideo = () => {
           <span className="font-medium text-sm">Waktu Rekaman Video</span>
           <span className="text-[10px] text-muted-foreground bg-muted/50 rounded px-1.5 py-0.5 ml-1">Opsional — untuk grafik jam</span>
         </div>
-        <input
-          type="datetime-local"
-          step="1"
-          value={recordingStart}
-          onChange={(e) => setRecordingStart(e.target.value)}
-          className="w-full rounded-lg border border-border/60 bg-background/60 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-        />
+        <div className="flex gap-2">
+          <input
+            type="datetime-local"
+            step="1"
+            value={recordingStart}
+            onChange={(e) => setRecordingStart(e.target.value)}
+            className="flex-1 rounded-lg border border-border/60 bg-background/60 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const now = new Date();
+              now.setSeconds(0, 0);
+              setRecordingStart(now.toISOString().slice(0, 16));
+            }}
+            className="shrink-0 rounded-lg border border-border/60 bg-muted/50 hover:bg-muted px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            title="Isi dengan waktu sekarang"
+          >
+            Sekarang
+          </button>
+        </div>
+        {recordingStart && (
+          <div className="flex gap-1.5 mt-2">
+            {[-5, -15, -30, -60].map((min) => (
+              <button
+                key={min}
+                type="button"
+                onClick={() => {
+                  const base = recordingStart ? new Date(recordingStart) : new Date();
+                  base.setMinutes(base.getMinutes() + min);
+                  base.setSeconds(0, 0);
+                  setRecordingStart(base.toISOString().slice(0, 16));
+                }}
+                className="text-[10px] rounded px-1.5 py-0.5 border border-border/50 bg-muted/30 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {min}m
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setRecordingStart("")}
+              className="text-[10px] rounded px-1.5 py-0.5 border border-border/50 bg-muted/30 hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors ml-auto"
+            >
+              Hapus
+            </button>
+          </div>
+        )}
         <p className="text-[10px] text-muted-foreground mt-2">
           Masukkan kapan rekaman dimulai. Hasil deteksi akan didistribusikan ke grafik Deteksi Kendaraan per jam di Dashboard.
         </p>
