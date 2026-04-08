@@ -3,7 +3,7 @@ import {
   Upload, Film, X, BarChart3, Truck, Car,
   PersonStanding, Bike, Loader2, Download, AlertCircle, Info,
   Copy, Play, Cpu, Monitor, Maximize, Clock, Layers, Timer,
-  Link, CheckCircle2, XCircle, RefreshCw
+  Link, CheckCircle2, XCircle, RefreshCw, CalendarClock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,6 +92,9 @@ const ProsesVideo = () => {
   const [annotatedVideoUrl, setAnnotatedVideoUrl] = useState<string | null>(null);
   const [headerInfo, setHeaderInfo] = useState<{ totalCount: string; framesProcessed: string; processingTime: string } | null>(null);
 
+  // Recording timestamp (for hourly chart)
+  const [recordingStart, setRecordingStart] = useState("");
+
   // Frame preview state
   const [frameImage, setFrameImage] = useState<HTMLImageElement | null>(null);
   const [frameLoading, setFrameLoading] = useState(false);
@@ -101,6 +104,25 @@ const ProsesVideo = () => {
   useEffect(() => {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
+
+  /* ─── Save to hourly chart ─── */
+  const saveVideoDetection = useCallback(async (counts: Counts, durationSeconds: number) => {
+    if (!recordingStart || durationSeconds <= 0) return;
+    try {
+      await fetch(`${baseUrl}/stats/video-detection`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recording_start: recordingStart,
+          duration_seconds: durationSeconds,
+          big_vehicle: counts.big_vehicle,
+          car: counts.car,
+          pedestrian: counts.pedestrian,
+          two_wheeler: counts.two_wheeler,
+        }),
+      });
+    } catch { /* ignore — chart save is non-critical */ }
+  }, [recordingStart, baseUrl]);
 
   /* ─── Extract first frame from uploaded file (client-side) ─── */
   useEffect(() => {
@@ -261,6 +283,9 @@ const ProsesVideo = () => {
                 two_wheeler: data.counts.two_wheeler,
               },
             }, baseUrl);
+            if (data.video_info) {
+              saveVideoDetection(data.counts, data.video_info.duration_seconds);
+            }
           }
         }
       } catch { /* ignore transient errors */ }
@@ -268,7 +293,7 @@ const ProsesVideo = () => {
 
     poll(); // immediate first poll
     pollRef.current = setInterval(poll, 5000);
-  }, [baseUrl, videoUrl]);
+  }, [baseUrl, videoUrl, saveVideoDetection]);
 
   /* ─── URL Job submit ─── */
   const submitUrlJob = useCallback(async () => {
@@ -428,6 +453,7 @@ const ProsesVideo = () => {
             two_wheeler: data.counts.two_wheeler,
           },
         }, baseUrl);
+        saveVideoDetection(data.counts, data.video_info.duration_seconds);
       } else {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
@@ -445,7 +471,7 @@ const ProsesVideo = () => {
     } finally {
       setLoading(false);
     }
-  }, [file, baseUrl, confidence, iou, modelSize, lineStartX, lineStartY, lineEndX, lineEndY]);
+  }, [file, baseUrl, confidence, iou, modelSize, lineStartX, lineStartY, lineEndX, lineEndY, saveVideoDetection]);
 
   const copyJson = useCallback(() => {
     const data = jsonResult ?? (jobStatus?.status === "done" ? jobStatus : null);
@@ -680,6 +706,25 @@ const ProsesVideo = () => {
           </div>
         </div>
       )}
+
+      {/* ═══ Waktu Rekaman ═══ */}
+      <div className="glass-card rounded-xl p-4 opacity-0 animate-fade-in-up" style={{ animationDelay: "180ms" }}>
+        <div className="flex items-center gap-2 mb-3">
+          <CalendarClock className="h-4 w-4 text-primary" />
+          <span className="font-medium text-sm">Waktu Rekaman Video</span>
+          <span className="text-[10px] text-muted-foreground bg-muted/50 rounded px-1.5 py-0.5 ml-1">Opsional — untuk grafik jam</span>
+        </div>
+        <input
+          type="datetime-local"
+          step="1"
+          value={recordingStart}
+          onChange={(e) => setRecordingStart(e.target.value)}
+          className="w-full rounded-lg border border-border/60 bg-background/60 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+        />
+        <p className="text-[10px] text-muted-foreground mt-2">
+          Masukkan kapan rekaman dimulai. Hasil deteksi akan didistribusikan ke grafik Deteksi Kendaraan per jam di Dashboard.
+        </p>
+      </div>
 
       {/* ═══ Frame Preview ═══ */}
       <div className="glass-card rounded-xl p-5 opacity-0 animate-fade-in-up" style={{ animationDelay: "200ms" }}>
