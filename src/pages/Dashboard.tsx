@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Truck, Car, PersonStanding, Bike, BarChart3, Camera, Film, Radio, Server, Trash2, ExternalLink, Download } from "lucide-react";
+import { Truck, Car, PersonStanding, Bike, BarChart3, Camera, Film, Radio, Server, Trash2, ExternalLink, Download, RotateCcw } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useApiSettings } from "@/contexts/ApiContext";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,16 @@ interface BackendLog {
 
 interface HourlyStat {
   hour: string;
+  big_vehicle: number;
+  car: number;
+  pedestrian: number;
+  two_wheeler: number;
+}
+
+interface WeeklyStat {
+  day: string;
+  date: string;
+  total: number;
   big_vehicle: number;
   car: number;
   pedestrian: number;
@@ -177,7 +187,11 @@ const Dashboard = () => {
   const [logs, setLogs] = useState<BackendLog[]>([]);
   const [summary, setSummary] = useState<SummaryStats | null>(null);
   const [hourlyData, setHourlyData] = useState<HourlyStat[]>([]);
+  const [weeklyData, setWeeklyData] = useState<WeeklyStat[]>([]);
   const [chartMode, setChartMode] = useState<"bar" | "line" | "daily">("bar");
+  const [showResetPopover, setShowResetPopover] = useState(false);
+  const [resetDate, setResetDate] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
 
   // Fetch system info
   useEffect(() => {
@@ -221,10 +235,10 @@ const Dashboard = () => {
     }
   }, [baseUrl]);
 
-  // Fetch hourly stats from backend
+  // Fetch hourly stats from video recordings
   const fetchHourly = useCallback(async () => {
     try {
-      const res = await fetch(`${baseUrl}/stats/hourly`, { signal: AbortSignal.timeout(5000) });
+      const res = await fetch(`${baseUrl}/stats/hourly-detections`, { signal: AbortSignal.timeout(5000) });
       if (res.ok) {
         const data: HourlyStat[] = await res.json();
         setHourlyData(data);
@@ -234,11 +248,25 @@ const Dashboard = () => {
     }
   }, [baseUrl]);
 
+  // Fetch weekly stats from video recordings
+  const fetchWeekly = useCallback(async () => {
+    try {
+      const res = await fetch(`${baseUrl}/stats/weekly-detections`, { signal: AbortSignal.timeout(5000) });
+      if (res.ok) {
+        const data: WeeklyStat[] = await res.json();
+        setWeeklyData(data);
+      }
+    } catch {
+      setWeeklyData([]);
+    }
+  }, [baseUrl]);
+
   useEffect(() => {
     fetchLogs();
     fetchSummary();
     fetchHourly();
-  }, [fetchLogs, fetchSummary, fetchHourly]);
+    fetchWeekly();
+  }, [fetchLogs, fetchSummary, fetchHourly, fetchWeekly]);
 
   const handleClearLogs = useCallback(async () => {
     try {
@@ -246,8 +274,24 @@ const Dashboard = () => {
       setLogs([]);
       fetchSummary();
       fetchHourly();
+      fetchWeekly();
     } catch { /* empty */ }
-  }, [baseUrl, fetchSummary, fetchHourly]);
+  }, [baseUrl, fetchSummary, fetchHourly, fetchWeekly]);
+
+  const handleResetDetections = useCallback(async () => {
+    setResetLoading(true);
+    try {
+      const url = resetDate
+        ? `${baseUrl}/stats/video-detections?date=${resetDate}`
+        : `${baseUrl}/stats/video-detections`;
+      await fetch(url, { method: "DELETE" });
+      setShowResetPopover(false);
+      setResetDate("");
+      fetchHourly();
+      fetchWeekly();
+    } catch { /* empty */ }
+    finally { setResetLoading(false); }
+  }, [baseUrl, resetDate, fetchHourly, fetchWeekly]);
 
   // Summary counts
   const counts = summary?.counts ?? { big_vehicle: 0, car: 0, pedestrian: 0, two_wheeler: 0, total: 0 };
@@ -307,22 +351,80 @@ const Dashboard = () => {
       {/* Section 2: Charts — Bar/Line chart + Donut */}
       <Section delay={200}>
         <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
-          {/* Bar / Line Chart */}
+          {/* Bar / Line / Harian Chart */}
           <div className="glass-card rounded-xl p-5">
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="text-lg font-semibold">Grafik Deteksi Kendaraan</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">Data deteksi per jam hari ini</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {chartMode === "daily" ? "Total kendaraan per hari minggu ini" : "Data deteksi per jam hari ini"}
+                </p>
               </div>
-              <div className="flex items-center gap-1 bg-muted/40 rounded-full p-0.5">
-                <ChartToggle active={chartMode === "bar"} label="Bar" onClick={() => setChartMode("bar")} />
-                <ChartToggle active={chartMode === "line"} label="Line" onClick={() => setChartMode("line")} />
-                <ChartToggle active={chartMode === "daily"} label="Harian" onClick={() => setChartMode("daily")} />
+              <div className="flex items-center gap-2">
+                {/* Reset popover */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowResetPopover((v) => !v)}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    title="Reset data grafik"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </button>
+                  {showResetPopover && (
+                    <div className="absolute right-0 top-8 z-50 w-64 glass-card rounded-xl p-4 border border-border/60 shadow-xl">
+                      <p className="text-xs font-semibold mb-1">Reset Data Grafik</p>
+                      <p className="text-[10px] text-muted-foreground mb-3">
+                        Hapus semua data, atau pilih tanggal tertentu (berguna jika salah input timestamp).
+                      </p>
+                      <input
+                        type="date"
+                        value={resetDate}
+                        onChange={(e) => setResetDate(e.target.value)}
+                        className="w-full rounded-lg border border-border/60 bg-background/60 px-2.5 py-1.5 text-xs text-foreground mb-3 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                      />
+                      <p className="text-[10px] text-muted-foreground mb-3">
+                        {resetDate ? `Hapus data tanggal ${resetDate}` : "Tidak ada tanggal dipilih → hapus SEMUA data"}
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="flex-1 h-7 text-xs"
+                          onClick={handleResetDetections}
+                          disabled={resetLoading}
+                        >
+                          {resetLoading ? "Menghapus..." : resetDate ? "Hapus Tanggal Ini" : "Hapus Semua"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={() => { setShowResetPopover(false); setResetDate(""); }}
+                        >
+                          Batal
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 bg-muted/40 rounded-full p-0.5">
+                  <ChartToggle active={chartMode === "bar"} label="Bar" onClick={() => setChartMode("bar")} />
+                  <ChartToggle active={chartMode === "line"} label="Line" onClick={() => setChartMode("line")} />
+                  <ChartToggle active={chartMode === "daily"} label="Harian" onClick={() => setChartMode("daily")} />
+                </div>
               </div>
             </div>
             <div className="h-[280px]">
               <ResponsiveContainer width="100%" height="100%">
-                {chartMode === "line" ? (
+                {chartMode === "daily" ? (
+                  <BarChart data={weeklyData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 16%, 22%)" />
+                    <XAxis dataKey="day" tick={{ fontSize: 11, fill: "hsl(215, 14%, 55%)" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: "hsl(215, 14%, 55%)" }} axisLine={false} tickLine={false} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar dataKey="total" name="Total Kendaraan" fill="hsl(160, 84%, 39%)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                ) : chartMode === "line" ? (
                   <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 16%, 22%)" />
                     <XAxis dataKey="hour" tick={{ fontSize: 11, fill: "hsl(215, 14%, 55%)" }} axisLine={false} tickLine={false} />
