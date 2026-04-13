@@ -394,6 +394,12 @@ const ProsesVideo = () => {
     setJsonResult(null);
     setAnnotatedVideoUrl(null);
     setHeaderInfo(null);
+    // Auto-fill recording time from file metadata (only if not already set)
+    setRecordingStart((prev) => {
+      if (prev) return prev;
+      const d = new Date(f.lastModified);
+      return d.toISOString().slice(0, 16);
+    });
   }, []);
 
   const handleDrop = useCallback((e: DragEvent) => {
@@ -745,23 +751,30 @@ const ProsesVideo = () => {
             Sekarang
           </button>
         </div>
-        {recordingStart && (
-          <div className="flex gap-1.5 mt-2">
-            {[-5, -15, -30, -60].map((min) => (
-              <button
-                key={min}
-                type="button"
-                onClick={() => {
-                  const base = recordingStart ? new Date(recordingStart) : new Date();
-                  base.setMinutes(base.getMinutes() + min);
-                  base.setSeconds(0, 0);
-                  setRecordingStart(base.toISOString().slice(0, 16));
-                }}
-                className="text-[10px] rounded px-1.5 py-0.5 border border-border/50 bg-muted/30 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {min}m
-              </button>
-            ))}
+        <div className="flex gap-1.5 mt-2 flex-wrap">
+          {[
+            { label: "-5m", min: -5 },
+            { label: "-15m", min: -15 },
+            { label: "-30m", min: -30 },
+            { label: "-1j", min: -60 },
+            { label: "-2j", min: -120 },
+          ].map(({ label, min }) => (
+            <button
+              key={min}
+              type="button"
+              title={`Geser ${Math.abs(min) >= 60 ? Math.abs(min)/60 + " jam" : Math.abs(min) + " menit"} ke belakang`}
+              onClick={() => {
+                const base = recordingStart ? new Date(recordingStart) : new Date();
+                base.setMinutes(base.getMinutes() + min);
+                base.setSeconds(0, 0);
+                setRecordingStart(base.toISOString().slice(0, 16));
+              }}
+              className="text-[10px] rounded px-1.5 py-0.5 border border-border/50 bg-muted/30 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {label}
+            </button>
+          ))}
+          {recordingStart && (
             <button
               type="button"
               onClick={() => setRecordingStart("")}
@@ -769,8 +782,8 @@ const ProsesVideo = () => {
             >
               Hapus
             </button>
-          </div>
-        )}
+          )}
+        </div>
         <p className="text-[10px] text-muted-foreground mt-2">
           Masukkan kapan rekaman dimulai. Hasil deteksi akan didistribusikan ke grafik Deteksi Kendaraan per jam di Dashboard.
         </p>
