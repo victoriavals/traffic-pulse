@@ -2,8 +2,74 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── SMOOTH THEME TRANSITION ──────────────────────────────────────────────
+   Hanya transisi properti yang berubah saat ganti tema.
+   Exclude transform & opacity agar animasi fade-in-up / pulse tidak terganggu.
+   ───────────────────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  transition-property: color, background-color, border-color, box-shadow, fill, stroke;
+  transition-timing-function: ease;
+  transition-duration: 200ms;
+}
+
+/* Matikan transisi untuk elemen yang butuh animasi instan */
+[data-no-transition],
+[data-no-transition] * {
+  transition: none !important;
+}
+
 @layer base {
+
+  /* ── LIGHT MODE (default) ─────────────────────────────────────────────── */
   :root {
+    --background: 220 20% 96%;
+    --foreground: 220 20% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 10%;
+
+    --primary: 160 72% 30%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 38 85% 40%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 220 14% 91%;
+    --muted-foreground: 215 14% 44%;
+
+    --accent: 220 14% 88%;
+    --accent-foreground: 220 20% 10%;
+
+    --destructive: 0 72% 46%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 16% 84%;
+    --input: 220 16% 84%;
+    --ring: 160 72% 30%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 220 20% 90%;
+    --sidebar-foreground: 215 16% 38%;
+    --sidebar-primary: 160 72% 30%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 16% 84%;
+    --sidebar-accent-foreground: 220 20% 10%;
+    --sidebar-border: 220 16% 82%;
+    --sidebar-ring: 160 72% 30%;
+
+    /* Traffic semantic colors — lebih gelap agar kontras di background terang */
+    --traffic-blue: 217 80% 42%;
+    --traffic-green: 160 72% 30%;
+    --traffic-amber: 38 80% 36%;
+    --traffic-purple: 258 75% 50%;
+  }
+
+  /* ── DARK MODE ────────────────────────────────────────────────────────── */
+  .dark {
     --background: 220 20% 10%;
     --foreground: 210 20% 92%;
 
@@ -32,8 +98,6 @@
     --input: 220 16% 22%;
     --ring: 160 84% 39%;
 
-    --radius: 0.75rem;
-
     --sidebar-background: 220 22% 8%;
     --sidebar-foreground: 215 14% 55%;
     --sidebar-primary: 160 84% 39%;
@@ -43,9 +107,7 @@
     --sidebar-border: 220 16% 16%;
     --sidebar-ring: 160 84% 39%;
 
-    --glass: 220 20% 14% / 0.6;
-    --glass-border: 220 16% 28% / 0.4;
-
+    /* Traffic semantic colors — lebih terang agar kontras di background gelap */
     --traffic-blue: 217 91% 60%;
     --traffic-green: 160 84% 39%;
     --traffic-amber: 38 92% 50%;
@@ -65,16 +127,25 @@
 
 @layer utilities {
   .glass-card {
-    @apply bg-card/60 backdrop-blur-xl border border-border/40 shadow-lg;
+    @apply bg-card/70 backdrop-blur-xl border border-border/50 shadow-sm;
+  }
+
+  /* Tambah shadow lebih kuat di light mode agar card terlihat jelas */
+  :root .glass-card {
+    box-shadow: 0 1px 3px hsl(220 20% 10% / 0.06), 0 4px 16px hsl(220 20% 10% / 0.06);
+  }
+
+  .dark .glass-card {
+    @apply shadow-lg;
   }
 
   .gradient-primary {
-    background: linear-gradient(135deg, hsl(160 84% 39%), hsl(174 72% 40%));
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(174 72% 40%));
   }
 
   .gradient-total {
-    background: linear-gradient(135deg, hsl(160 84% 39% / 0.15), hsl(174 72% 40% / 0.1));
-    border-color: hsl(160 84% 39% / 0.25);
+    background: linear-gradient(135deg, hsl(var(--primary) / 0.15), hsl(174 72% 40% / 0.08));
+    border-color: hsl(var(--primary) / 0.25);
   }
 
   .pulse-live {
@@ -83,6 +154,6 @@
 
   @keyframes pulse-dot {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+    50%       { opacity: 0.4; }
   }
 }
