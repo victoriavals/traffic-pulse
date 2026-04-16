@@ -19,13 +19,40 @@ const clampLine = (v: string): number => {
   return Math.min(1, Math.max(0, parseFloat(n.toFixed(2))));
 };
 
+/**
+ * Application sidebar with navigation, detection configuration panel, and
+ * a live job-activity indicator.
+ *
+ * ## Active-job dot indicator
+ * A small amber pulsing dot is rendered next to "Proses Video" whenever a
+ * URL-based video job is in progress.  The indicator is driven by
+ * `localStorage` so it stays accurate across page navigations:
+ *
+ * - **Same-tab updates**: ProsesVideo dispatches a custom
+ *   `"job-storage-change"` event after each `localStorage` write/remove.
+ * - **Cross-tab updates**: the native `"storage"` event propagates writes
+ *   from other tabs automatically.
+ *
+ * Both listeners call the same `check()` function so the UI is always
+ * consistent regardless of where the change originated.
+ */
 export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const config = useDetectionConfig();
   const [configOpen, setConfigOpen] = useState(true);
+
+  /**
+   * Whether a URL video job is currently active.
+   * Initialised synchronously from localStorage so there is no flash of
+   * missing indicator on mount.
+   */
   const [hasActiveJob, setHasActiveJob] = useState(() => !!localStorage.getItem("traffic_active_job"));
 
+  /**
+   * Listen for job-state changes from any source (same tab or other tabs)
+   * and sync the indicator accordingly.
+   */
   useEffect(() => {
     const check = () => setHasActiveJob(!!localStorage.getItem("traffic_active_job"));
     window.addEventListener("storage", check);             // cross-tab
