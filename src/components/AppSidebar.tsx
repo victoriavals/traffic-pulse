@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { LayoutDashboard, Image, Film, Radio, TrafficCone, ChevronLeft, ChevronRight, SlidersHorizontal, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -24,6 +24,17 @@ export function AppSidebar() {
   const location = useLocation();
   const config = useDetectionConfig();
   const [configOpen, setConfigOpen] = useState(true);
+  const [hasActiveJob, setHasActiveJob] = useState(() => !!localStorage.getItem("traffic_active_job"));
+
+  useEffect(() => {
+    const check = () => setHasActiveJob(!!localStorage.getItem("traffic_active_job"));
+    window.addEventListener("storage", check);             // cross-tab
+    window.addEventListener("job-storage-change", check); // same-tab
+    return () => {
+      window.removeEventListener("storage", check);
+      window.removeEventListener("job-storage-change", check);
+    };
+  }, []);
 
   const isDashboard = location.pathname === "/";
   const isImagePage = location.pathname === "/deteksi-gambar";
@@ -68,6 +79,9 @@ export function AppSidebar() {
               >
                 <item.icon className="h-5 w-5 shrink-0" />
                 {!collapsed && <span>{item.title}</span>}
+                {!collapsed && item.title === "Proses Video" && hasActiveJob && (
+                  <span className="ml-auto h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+                )}
               </NavLink>
             );
           })}
