@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { Settings, ChevronRight } from "lucide-react";
+import { Settings, ChevronRight, Sun, Moon } from "lucide-react";
+import { useTheme } from "next-themes";
 import { useApiSettings } from "@/contexts/ApiContext";
 import { ApiSettingsModal } from "./ApiSettingsModal";
 
@@ -10,6 +11,67 @@ const routeNames: Record<string, string> = {
   "/proses-video": "Proses Video",
   "/live-monitoring": "Live Monitoring",
 };
+
+/* ─── Theme cycle order: system → light → dark → system … ─── */
+const CYCLE: Array<"system" | "light" | "dark"> = ["system", "light", "dark"];
+
+function ThemeToggle() {
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
+
+  const handleClick = () => {
+    const current = (theme as typeof CYCLE[number]) ?? "system";
+    const next = CYCLE[(CYCLE.indexOf(current) + 1) % CYCLE.length];
+    setTheme(next);
+  };
+
+  /* Placeholder ukuran sama agar layout tidak shift sebelum mounted */
+  if (!mounted) {
+    return <span className="h-7 w-7 rounded-lg" />;
+  }
+
+  const isDark = resolvedTheme === "dark";
+  const isSystem = theme === "system";
+
+  return (
+    <button
+      onClick={handleClick}
+      className="relative rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+      aria-label={`Tema saat ini: ${theme}. Klik untuk ganti.`}
+      title={`Tema: ${theme === "system" ? "Sistem" : theme === "dark" ? "Gelap" : "Terang"}`}
+    >
+      {/* Sun icon — tampil di dark mode, fade keluar di light */}
+      <Sun
+        className="h-4 w-4 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+        style={{
+          opacity: isDark ? 1 : 0,
+          transform: `translate(-50%, -50%) rotate(${isDark ? 0 : 90}deg) scale(${isDark ? 1 : 0.5})`,
+          transition: "opacity 250ms ease, transform 250ms ease",
+        }}
+      />
+      {/* Moon icon — tampil di light mode, fade keluar di dark */}
+      <Moon
+        className="h-4 w-4 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+        style={{
+          opacity: !isDark ? 1 : 0,
+          transform: `translate(-50%, -50%) rotate(${!isDark ? 0 : -90}deg) scale(${!isDark ? 1 : 0.5})`,
+          transition: "opacity 250ms ease, transform 250ms ease",
+        }}
+      />
+      {/* Spacer agar button punya ukuran */}
+      <span className="h-4 w-4 block opacity-0" aria-hidden />
+      {/* Dot indikator "system" mode */}
+      {isSystem && (
+        <span
+          className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary border-2 border-background"
+          title="Mengikuti preferensi sistem"
+        />
+      )}
+    </button>
+  );
+}
 
 export function TopBar() {
   const location = useLocation();
@@ -60,6 +122,9 @@ export function TopBar() {
               {isConnected ? "API Terhubung" : "API Terputus"}
             </span>
           </div>
+
+          {/* Theme toggle */}
+          <ThemeToggle />
 
           {/* Settings */}
           <button
