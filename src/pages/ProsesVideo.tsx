@@ -56,8 +56,31 @@ const CLASS_COLORS = [
 
 const VIDEO_TYPES = ["video/mp4", "video/x-msvideo", "video/quicktime", "video/x-matroska"];
 
+/**
+ * localStorage key used to persist an active URL-based video job across
+ * browser sessions and tab navigations.
+ *
+ * The value is a JSON-serialised {@link PersistedJob}.  It is written when a
+ * job is submitted, cleared when the job reaches a terminal state (done /
+ * error / cancelled), and read on component mount to auto-resume polling.
+ */
 const ACTIVE_JOB_KEY = "traffic_active_job";
-interface PersistedJob { jobId: string; videoUrl: string; recordingStart: string; }
+
+/**
+ * Minimal job snapshot persisted to localStorage.
+ *
+ * Only the fields needed to reconnect to an in-progress backend job are
+ * stored here.  Full job state (counts, video_info, …) is fetched live from
+ * the backend when polling resumes.
+ */
+interface PersistedJob {
+  /** Backend job ID returned by POST /video/jobs. */
+  jobId: string;
+  /** Original public video URL submitted by the user. */
+  videoUrl: string;
+  /** ISO-8601 recording start timestamp (may be empty if not set). */
+  recordingStart: string;
+}
 
 
 const JOB_STATUS_CONFIG: Record<VideoJobStatus["status"], { label: string; color: string; icon: React.ElementType }> = {
@@ -104,12 +127,24 @@ const ProsesVideo = () => {
   const [frameLoading, setFrameLoading] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  /* ─── Polling cleanup on unmount ─── */
+  /* ─── Polling cleanup on unmount ─────────────────────────────────────────
+   * Clears the setInterval polling loop when the user navigates away.
+   * The backend job continues running; localStorage retains the jobId so
+   * the next mount can resume polling automatically.                       */
   useEffect(() => {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
-  /* ─── Restore persisted job on mount ─── */
+  /* ─── Restore persisted job on mount ─────────────────────────────────────
+   * On component mount, checks localStorage for an active job from a
+   * previous session.  If found:
+   *   1. Restores jobId, videoUrl, recordingStart, and inputMode.
+   *   2. Sets pendingResumeRef so the auto-resume effect can start polling
+   *      once startPolling has been defined (hooks called later in render).
+   *   3. Shows a toast notification to inform the user.
+   *
+   * Corrupt JSON is caught and the key is removed so the component mounts
+   * cleanly with a blank slate.                                             */
   useEffect(() => {
     const raw = localStorage.getItem(ACTIVE_JOB_KEY);
     if (!raw) return;
@@ -127,7 +162,12 @@ const ProsesVideo = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ─── Warn before leaving page during file upload ─── */
+  /* ─── Warn before leaving page during file upload ─────────────────────────
+   * File uploads are synchronous HTTP POST requests — there is no job ID to
+   * reconnect to after a page reload.  The browser native "Leave site?"
+   * dialog is the only guardrail available for this mode.
+   * The handler is added only while loading=true and removed immediately
+   * after the upload completes or fails.                                    */
   useEffect(() => {
     if (!loading) return;
     const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
@@ -293,7 +333,20 @@ const ProsesVideo = () => {
     const poll = async () => {
       try {
         const res = await fetch(`${baseUrl}/video/jobs/${id}`);
-        if (!res.ok) return;
+
+        // Job not found — server restarted and job was interrupted
+        if (res.status === 404) {
+          clearInterval(pollRef.current!);
+          pollRef.current = null;
+          localStorage.removeItem(ACTIVE_JOB_KEY);
+          window.dispatchEvent(new Event("job-storage-change"));
+          setJobId(null);
+          setJobStatus(null);
+          setError("Job tidak ditemukan. Server kemungkinan direstart saat memproses. Silakan kirim ulang video.");
+          return;
+        }
+
+        if (!res.ok) return; // transient error — retry on next interval
         const data: VideoJobStatus = await res.json();
         setJobStatus(data);
 
