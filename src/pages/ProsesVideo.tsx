@@ -56,6 +56,9 @@ const CLASS_COLORS = [
 
 const VIDEO_TYPES = ["video/mp4", "video/x-msvideo", "video/quicktime", "video/x-matroska"];
 
+const ACTIVE_JOB_KEY = "traffic_active_job";
+interface PersistedJob { jobId: string; videoUrl: string; recordingStart: string; }
+
 
 const JOB_STATUS_CONFIG: Record<VideoJobStatus["status"], { label: string; color: string; icon: React.ElementType }> = {
   pending: { label: "Menunggu...", color: "text-muted-foreground", icon: Loader2 },
@@ -83,6 +86,7 @@ const ProsesVideo = () => {
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<VideoJobStatus | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pendingResumeRef = useRef<string | null>(null);
 
   // Upload results
   const [loading, setLoading] = useState(false);
@@ -104,6 +108,32 @@ const ProsesVideo = () => {
   useEffect(() => {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
+
+  /* ─── Restore persisted job on mount ─── */
+  useEffect(() => {
+    const raw = localStorage.getItem(ACTIVE_JOB_KEY);
+    if (!raw) return;
+    try {
+      const p = JSON.parse(raw) as PersistedJob;
+      pendingResumeRef.current = p.jobId;
+      setJobId(p.jobId);
+      setVideoUrl(p.videoUrl);
+      setRecordingStart(p.recordingStart);
+      setInputMode("url");
+      toast({ title: "Melanjutkan pemrosesan", description: "Job video sebelumnya ditemukan dan dilanjutkan." });
+    } catch {
+      localStorage.removeItem(ACTIVE_JOB_KEY);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ─── Warn before leaving page during file upload ─── */
+  useEffect(() => {
+    if (!loading) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [loading]);
 
   /* ─── Save to hourly chart ─── */
   const saveVideoDetection = useCallback(async (counts: Counts, durationSeconds: number) => {
@@ -270,6 +300,8 @@ const ProsesVideo = () => {
         if (data.status === "done" || data.status === "error") {
           clearInterval(pollRef.current!);
           pollRef.current = null;
+          localStorage.removeItem(ACTIVE_JOB_KEY);
+          window.dispatchEvent(new Event("job-storage-change"));
 
           if (data.status === "done" && data.counts) {
             addActivityLog({
@@ -294,6 +326,15 @@ const ProsesVideo = () => {
     poll(); // immediate first poll
     pollRef.current = setInterval(poll, 5000);
   }, [baseUrl, videoUrl, saveVideoDetection]);
+
+  /* ─── Auto-resume polling once state settles after restore ─── */
+  useEffect(() => {
+    if (pendingResumeRef.current && jobId === pendingResumeRef.current) {
+      const id = pendingResumeRef.current;
+      pendingResumeRef.current = null;
+      startPolling(id);
+    }
+  }, [jobId, startPolling]);
 
   /* ─── URL Job submit ─── */
   const submitUrlJob = useCallback(async () => {
@@ -329,6 +370,8 @@ const ProsesVideo = () => {
       const data: VideoJobStatus = await res.json();
       setJobId(data.job_id);
       setJobStatus(data);
+      localStorage.setItem(ACTIVE_JOB_KEY, JSON.stringify({ jobId: data.job_id, videoUrl, recordingStart } satisfies PersistedJob));
+      window.dispatchEvent(new Event("job-storage-change"));
       startPolling(data.job_id);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Gagal membuat job");
@@ -341,6 +384,8 @@ const ProsesVideo = () => {
     if (jobId) {
       try { await fetch(`${baseUrl}/video/jobs/${jobId}`, { method: "DELETE" }); } catch { /* ignore */ }
     }
+    localStorage.removeItem(ACTIVE_JOB_KEY);
+    window.dispatchEvent(new Event("job-storage-change"));
     setJobId(null);
     setJobStatus(null);
     setError(null);
@@ -385,6 +430,12 @@ const ProsesVideo = () => {
     }
   }, [videoUrl, baseUrl]);
 
+  /* ─── Local datetime helper (avoids UTC offset from toISOString) ─── */
+  const toLocalDT = (d: Date) => {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
   /* ─── File upload ─── */
   const handleFile = useCallback((f: File) => {
     if (!VIDEO_TYPES.includes(f.type) && !f.name.match(/\.(mp4|avi|mov|mkv)$/i)) return;
@@ -398,7 +449,7 @@ const ProsesVideo = () => {
     setRecordingStart((prev) => {
       if (prev) return prev;
       const d = new Date(f.lastModified);
-      return d.toISOString().slice(0, 16);
+      return toLocalDT(d);
     });
   }, []);
 
@@ -743,7 +794,7 @@ const ProsesVideo = () => {
             onClick={() => {
               const now = new Date();
               now.setSeconds(0, 0);
-              setRecordingStart(now.toISOString().slice(0, 16));
+              setRecordingStart(toLocalDT(now));
             }}
             className="shrink-0 rounded-lg border border-border/60 bg-muted/50 hover:bg-muted px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
             title="Isi dengan waktu sekarang"
@@ -767,7 +818,7 @@ const ProsesVideo = () => {
                 const base = recordingStart ? new Date(recordingStart) : new Date();
                 base.setMinutes(base.getMinutes() + min);
                 base.setSeconds(0, 0);
-                setRecordingStart(base.toISOString().slice(0, 16));
+                setRecordingStart(toLocalDT(base));
               }}
               className="text-[10px] rounded px-1.5 py-0.5 border border-border/50 bg-muted/30 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
             >
