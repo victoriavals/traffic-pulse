@@ -5,6 +5,7 @@ import {
   Copy, Play, Cpu, Monitor, Maximize, Clock, Layers, Timer,
   Link, CheckCircle2, XCircle, RefreshCw, CalendarClock
 } from "lucide-react";
+import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useApiSettings } from "@/contexts/ApiContext";
@@ -95,6 +96,7 @@ const JOB_STATUS_CONFIG: Record<VideoJobStatus["status"], { label: string; color
 const ProsesVideo = () => {
   const { baseUrl } = useApiSettings();
   const { confidence, iou, modelSize, lineStartX, lineStartY, lineEndX, lineEndY } = useDetectionConfig();
+  const { resolvedTheme } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Input mode
@@ -240,16 +242,16 @@ const ProsesVideo = () => {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    const isDark = resolvedTheme !== "light";
+
     if (frameImage) {
-      // Size canvas to image aspect ratio
       canvas.width = frameImage.naturalWidth;
       canvas.height = frameImage.naturalHeight;
 
-      // Draw frame
       ctx.drawImage(frameImage, 0, 0);
 
-      // Semi-transparent darkening for better line visibility
-      ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
+      // Overlay lebih gelap di light mode agar garis tetap kontras di atas foto
+      ctx.fillStyle = isDark ? "rgba(0,0,0,0.15)" : "rgba(0,0,0,0.30)";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       const w = canvas.width;
@@ -259,7 +261,6 @@ const ProsesVideo = () => {
       const ex = lineEndX * w;
       const ey = lineEndY * h;
 
-      // Draw counting line (glow effect)
       ctx.shadowColor = "#10b981";
       ctx.shadowBlur = 12;
       ctx.strokeStyle = "#10b981";
@@ -271,7 +272,6 @@ const ProsesVideo = () => {
       ctx.stroke();
       ctx.shadowBlur = 0;
 
-      // Start point (green)
       const dotR = Math.max(6, w * 0.006);
       ctx.fillStyle = "#10b981";
       ctx.beginPath();
@@ -281,7 +281,6 @@ const ProsesVideo = () => {
       ctx.font = `bold ${Math.max(12, w * 0.014)}px monospace`;
       ctx.fillText("S", sx + dotR + 4, sy + 5);
 
-      // End point (red)
       ctx.fillStyle = "#ef4444";
       ctx.beginPath();
       ctx.arc(ex, ey, dotR, 0, Math.PI * 2);
@@ -290,19 +289,21 @@ const ProsesVideo = () => {
       ctx.fillText("E", ex + dotR + 4, ey + 5);
 
     } else {
-      // Fallback: dark background with grid and line (similar to old SVG)
+      // Fallback: preview viewfinder — sengaja gelap di kedua mode (simulasi kamera)
       canvas.width = 320;
       canvas.height = 180;
-      ctx.fillStyle = "#1a1a2e";
+
+      // Sedikit lebih terang di light mode untuk mengurangi kontras dengan UI sekitarnya
+      ctx.fillStyle = isDark ? "#0f1629" : "#1e293b";
       ctx.fillRect(0, 0, 320, 180);
 
       // Grid lines
-      ctx.strokeStyle = "rgba(255,255,255,0.06)";
+      const gridAlpha = isDark ? 0.07 : 0.12;
+      ctx.strokeStyle = `rgba(255,255,255,${gridAlpha})`;
       ctx.lineWidth = 1;
       for (let x = 80; x < 320; x += 80) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 180); ctx.stroke(); }
       for (let y = 60; y < 180; y += 60) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(320, y); ctx.stroke(); }
 
-      // Counting line
       const sx = lineStartX * 320, sy = lineStartY * 180;
       const ex = lineEndX * 320, ey = lineEndY * 180;
       ctx.shadowColor = "#10b981";
@@ -324,7 +325,7 @@ const ProsesVideo = () => {
       ctx.fillStyle = "#ef4444";
       ctx.fillText("E", ex + 7, ey - 4);
     }
-  }, [frameImage, lineStartX, lineStartY, lineEndX, lineEndY]);
+  }, [frameImage, lineStartX, lineStartY, lineEndX, lineEndY, resolvedTheme]);
 
   /* ─── Job polling ─── */
   const startPolling = useCallback((id: string) => {
@@ -903,7 +904,7 @@ const ProsesVideo = () => {
             </div>
           )}
           {!frameImage && !frameLoading && (
-            <p className="absolute inset-0 flex items-center justify-center text-[10px] text-muted-foreground pointer-events-none">
+            <p className="absolute inset-0 flex items-center justify-center text-[10px] text-white/50 pointer-events-none">
               {inputMode === "upload" ? "Upload video untuk melihat preview" : "Masukkan URL lalu klik Preview Frame"}
             </p>
           )}
