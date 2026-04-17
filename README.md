@@ -36,7 +36,7 @@
 
 - **Node.js** >= 18
 - **npm** >= 9
-- **Backend API** running di `http://localhost:8000` (FastAPI + YOLOv11)
+- **Backend API** running di `http://localhost:3219` (FastAPI + YOLOv11)
 
 ### Installation
 
@@ -48,7 +48,7 @@ cd traffic-pulse
 # Install dependencies
 npm install
 
-# Start development server (port 8080)
+# Start development server (port 9321)
 npm run dev
 ```
 
@@ -56,7 +56,7 @@ npm run dev
 
 | Script | Deskripsi |
 |---|---|
-| `npm run dev` | Start dev server (port 8080) |
+| `npm run dev` | Start dev server (port 9321) |
 | `npm run build` | Build production bundle |
 | `npm run preview` | Preview production build |
 | `npm run lint` | Run ESLint |
@@ -64,7 +64,7 @@ npm run dev
 
 ## Konfigurasi API
 
-Default API base URL: `http://localhost:8000`
+Default API base URL: `http://localhost:3219`
 
 Bisa diubah melalui **Settings** (ikon ⚙️ di top bar) atau langsung di kode `src/contexts/ApiContext.tsx`.
 
