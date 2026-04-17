@@ -19,11 +19,11 @@ const getDefaultBaseUrl = (): string => {
     return envBaseUrl.trim();
   }
 
-  if (typeof window === "undefined") return "http://localhost:8000";
+  if (typeof window === "undefined") return "http://localhost:3219";
 
   const protocol = window.location.protocol === "https:" ? "https" : "http";
   const host = window.location.hostname || "localhost";
-  return `${protocol}://${host}:8000`;
+  return `${protocol}://${host}:3219`;
 };
 
 const getInitialBaseUrl = (): string => {
@@ -33,7 +33,7 @@ const getInitialBaseUrl = (): string => {
     return envBaseUrl.trim();
   }
 
-  if (typeof window === "undefined") return "http://localhost:8000";
+  if (typeof window === "undefined") return "http://localhost:3219";
 
   const saved = window.localStorage.getItem(API_BASE_URL_KEY);
   if (saved && saved.trim().length > 0) return saved;
