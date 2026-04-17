@@ -41,7 +41,7 @@ export function ApiSettingsModal({ open, onOpenChange }: Props) {
               id="api-url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="http://localhost:8000"
+              placeholder="http://localhost:3219"
             />
           </div>
           <Button onClick={handleSave} className="w-full">
