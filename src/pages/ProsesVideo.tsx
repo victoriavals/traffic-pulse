@@ -289,16 +289,17 @@ const ProsesVideo = () => {
       ctx.fillText("E", ex + dotR + 4, ey + 5);
 
     } else {
-      // Fallback: preview viewfinder — sengaja gelap di kedua mode (simulasi kamera)
+      // Fallback: preview viewfinder
       canvas.width = 320;
       canvas.height = 180;
 
-      // Sedikit lebih terang di light mode untuk mengurangi kontras dengan UI sekitarnya
-      ctx.fillStyle = isDark ? "#0f1629" : "#1e293b";
+      // Light mode: abu-abu medium (#475569) — kontras dengan UI terang, garis tetap jelas
+      // Dark mode: navy gelap (#0f1629) — tetap seperti layar kamera
+      ctx.fillStyle = isDark ? "#0f1629" : "#475569";
       ctx.fillRect(0, 0, 320, 180);
 
       // Grid lines
-      const gridAlpha = isDark ? 0.07 : 0.12;
+      const gridAlpha = isDark ? 0.07 : 0.15;
       ctx.strokeStyle = `rgba(255,255,255,${gridAlpha})`;
       ctx.lineWidth = 1;
       for (let x = 80; x < 320; x += 80) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 180); ctx.stroke(); }
